@@ -7,6 +7,7 @@ import spotipy
 import spotipy.util as util
 import argparse
 import pandas as pd
+from tqdm import tqdm
 
 class APIClient:
     def __init__(self, username: str, id: str, secret: str):
@@ -71,7 +72,7 @@ class APIClient:
             # track_id = first_result['id']
             return first_result
         except:
-            print("failed")
+            # print("failed")
             raise
 
     def get_artist_id(self, artist_name: str) -> str:
@@ -82,7 +83,7 @@ class APIClient:
         artist = self.__call_api(params, 'artists')
         return artist['id']
 
-    def get_id(self, track_name: str, token: str) -> str:
+    def get_id(self, track_name: str) -> str:
         params = [
         ('q', track_name),
         ('type', 'track'),
@@ -102,6 +103,15 @@ class APIClient:
             # return None
 
 def get_streams_done(path: str) -> List[dict]:
+    """
+    Look for files done in the output folder
+
+    :param path: the path of the output folder
+    :type path: str
+    :return: the list of existing results
+    :rtype: List[dict]
+    """
+
     features_done: List[dict] = []
     json_files = [os.path.join(path, file) for file in os.listdir(path)]
     for file in json_files:
@@ -109,7 +119,7 @@ def get_streams_done(path: str) -> List[dict]:
             features_done.extend(json.load(f))
     return features_done
 
-def get_ids_from_streams_done(path: str) -> List[str]:
+def get_uri_from_streams_done(path: str) -> List[str]:
     """
     Look into the feature json files for ids that have been done. It helps
     whenever we have connection issues or access to Spotify API fails by
@@ -119,11 +129,11 @@ def get_ids_from_streams_done(path: str) -> List[str]:
 
     :param path: the path of the feature directory
     :type path: str
-    :return: the list of the ids where features have been accessed
+    :return: the list of the uri where features have been accessed
     :rtype: List[str]
     """
     features_done = get_streams_done(path)
-    unique_ids = list(set([feature_done['id']
+    unique_ids = list(set([feature_done['uri']
                     for feature_done in features_done]))
     return unique_ids
 
@@ -180,29 +190,36 @@ def get_features(track_id: str, token: str) -> dict:
 
 def get_features_all_tracks(streamings: List[dict],
                             ids_done: List[dict], client: APIClient) -> List[dict]:
-    WAITING_TIME = 0
-    # get all informations by tracknames
-    unique_tracks = list(set([streaming['master_metadata_track_name']
-                    for streaming in streamings]))
+    """
+    Get the track features of the streamings
 
+    :param streamings: the list of all the streamings of the client
+    :type streamings: List[dict]
+    :param ids_done: the track' ids that have already been done
+    :type ids_done: List[dict]
+    :param client: the client accessing the API
+    :type client: APIClient
+    :return: the list of the track' features
+    :rtype: List[dict]
+    """
+    WAITING_TIME = 0
+    # get all information by tracknames
+    unique_tracks = list(set([streaming['spotify_track_uri']
+                    for streaming in streamings]))
     all_features = {}
-    for track in unique_tracks:
-        token = client.__token
-        try:
-            track_id = get_id(track, token)
-            if track_id in ids_done:
-                features = None
-                # print(f"{track} already done")
-            else:
-                features = get_features(track_id, token)
+    for track in tqdm(unique_tracks):
+        if track not in ids_done:
+            try:
+                track_id = client.get_id(track)
+                features = get_features(track_id)
                 # print(f"{track} got")
             # except (spotipy.exceptions.SpotifyException,
             #         requests.exceptions.ProxyError):
-        except:
-            features = None
-            # print(f"{track} failed")
-        if features:
-            all_features[track] = features
+            except:
+                features = None
+                # print(f"{track} failed")
+            if features:
+                all_features[track] = features
 
     with_features = []
     for track_name, features in all_features.items():
@@ -210,6 +227,14 @@ def get_features_all_tracks(streamings: List[dict],
     return with_features
 
 def save_feature_data(path: str, features: List[dict]) -> None:
+    """
+    Save the data in the output folder
+
+    :param path: the output path
+    :type path: str
+    :param features: the data to save
+    :type features: List[dict]
+    """
     # Writing data to JSON
     features_done = get_streams_done(path)
     features_done.extend(features)
@@ -231,30 +256,28 @@ def main(args: dict):
     BASEPATH = os.path.dirname(os.path.realpath(__file__))
     DATAPATH = os.path.join(BASEPATH, "MyData")
 
-    # # directory where the feature information accessed through API will lie
-    # FEATURESPATH = os.path.join(BASEPATH, "Features")
-    # if not os.path.isdir(FEATURESPATH):
-    #     os.mkdir(FEATURESPATH)
-    #     ids_done = []
-    # else:
-    #     ids_done = get_ids_from_streams_done(FEATURESPATH)
+    # directory where the feature information accessed through API will lie
+    FEATURESPATH = os.path.join(BASEPATH, "Features")
+    if not os.path.isdir(FEATURESPATH):
+        os.mkdir(FEATURESPATH)
+        ids_done = []
+    else:
+        ids_done = get_uri_from_streams_done(FEATURESPATH)
 
     streamings = get_streamings(DATAPATH)
-    # try:
-    #     features = get_features_all_tracks(streamings, ids_done, username,
-    #                                        id, secret)
-    # except Exception as e:
-    #     print(e)
-    #     import pdb
-    #     pdb.set_trace()
-    # save_feature_data(FEATURESPATH, features)
+    try:
+        features = get_features_all_tracks(streamings, ids_done, client)
+    except Exception as e:
+        print(e)
+        raise
+    save_feature_data(FEATURESPATH, features)
 
     ARTISTSPATH = os.path.join(BASEPATH, "Artists")
     if not os.path.isdir(ARTISTSPATH):
         os.mkdir(ARTISTSPATH)
         artists_done = []
     else:
-        artists_done = get_ids_from_streams_done(ARTISTSPATH)
+        artists_done = get_uri_from_streams_done(ARTISTSPATH)
     artists = get_artists(streamings)
     artists_and_related = ask_api_for_artists(artists, artists_done, client)
     save_feature_data(ARTISTSPATH, artists_and_related)
