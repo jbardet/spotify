@@ -4,7 +4,10 @@ import datetime
 import pickle
 import datetime
 import os.path
+import pandas as pd
+import numpy as np
 from todoist_api_python.api import Task
+from todoist.api import TodoistAPI
 
 from helpers import add_website_link
 
@@ -22,6 +25,85 @@ class Todoist():
         self.window = window
 
         self.tasks = self.get_tasks()
+
+    def get_completed_todoist_items(self, user_completed_stats):
+        # create df from initial 50 completed tasks
+        print("Collecting Initial 50 Completed Todoist Tasks...")
+        temp_tasks_dict = (self.api.completed.get_all(limit=50))
+        past_tasks = pd.DataFrame.from_dict(temp_tasks_dict['items'])
+        # get the remaining items
+        pager = list(range(50,user_completed_stats,50))
+        for count, item in enumerate(pager):
+            tmp_tasks = (self.api.completed.get_all(limit=50, offset=item))
+            tmp_tasks_df = pd.DataFrame.from_dict(tmp_tasks['items'])
+            past_tasks = pd.concat([past_tasks, tmp_tasks_df])
+            print("Collecting Additional Todoist Tasks " + str(item) + " of " + str(user_completed_stats))
+        # save to CSV
+        print("...Generating CSV Export")
+        past_tasks.to_csv("data/todost-raw-tasks-completed.csv", index=False)
+
+    # get project info from Todoist API
+    def get_todoist_project_name(self, project_id):
+        item = self.api.projects.get_by_id(project_id)
+        if item:
+            try:
+                return item['name']
+            except:
+                return item['project']['name']
+
+    def weekly_save(self):
+        self.api = TodoistAPI(self.__token)
+
+        # get user current projects
+        user_projects  = self.api.state['projects']
+        with open('data/todoist-projects.csv', 'w') as file:
+            file.write("Id" + "," + "Project" + "\n")
+            for i in range(0, len(user_projects)):
+                file.write('\"' + str(user_projects[i]['id']) + '\"' + "," + '\"' + str(user_projects[i]['name']) + '\"' + "\n")
+        projects = pd.read_csv("data/todoist-projects.csv")
+
+        # user completed stats info
+        stats = self.api.completed.get_stats()
+        # total completed tasks from stats
+        user_completed_stats = stats['completed_count']
+        self.get_completed_todoist_items(user_completed_stats)
+        past_tasks = pd.read_csv("data/todost-raw-tasks-completed.csv")
+
+        # get all current and previous projects
+        # Extract all project ids used on tasks
+        project_ids = past_tasks.project_id.unique()
+
+        # Get Info on All User Projects
+        project_names = []
+        for i in project_ids:
+            project_names.append(self.get_todoist_project_name(i))
+
+        # Match Project Id Name on Completed Tasks, Add Day of Week
+        # Probably a more effecient way to do this
+        project_lookup = lambda x: self.get_todoist_project_name(x)
+        past_tasks['project_name'] = past_tasks['project_id'].apply(project_lookup) # note: not very efficient
+
+        # functions to convert UTC to Switzerland time zone and extract date/time elements
+        convert_tz = lambda x: x.to_pydatetime().replace(tzinfo=np.pytz.utc).astimezone(np.pytz.timezone('Europe/Zurich'))
+        get_year = lambda x: convert_tz(x).year
+        get_month = lambda x: '{}-{:02}'.format(convert_tz(x).year, convert_tz(x).month) #inefficient
+        get_date = lambda x: '{}-{:02}-{:02}'.format(convert_tz(x).year, convert_tz(x).month, convert_tz(x).day) #inefficient
+        get_day = lambda x: convert_tz(x).day
+        get_hour = lambda x: convert_tz(x).hour
+        get_day_of_week = lambda x: convert_tz(x).weekday()
+
+        # parse out date and time elements as Switzerland time
+        past_tasks['completed_date'] = pd.to_datetime(past_tasks['completed_date'])
+        past_tasks['year'] = past_tasks['completed_date'].map(get_year)
+        past_tasks['month'] = past_tasks['completed_date'].map(get_month)
+        past_tasks['date'] = past_tasks['completed_date'].map(get_date)
+        past_tasks['day'] = past_tasks['completed_date'].map(get_day)
+        past_tasks['hour'] = past_tasks['completed_date'].map(get_hour)
+        past_tasks['dow'] = past_tasks['completed_date'].map(get_day_of_week)
+        past_tasks = past_tasks.drop(labels=['completed_date'], axis=1)
+
+        # save to CSV
+        past_tasks.to_csv("data/todost-tasks-completed.csv", index=False)
 
     def get_tasks(self) -> List[Task]:
         """
@@ -114,3 +196,5 @@ class Todoist():
 
         # bind the button to the function that changes the color of the selected
         self.tasks_listbox.bind('<<ListboxSelect>>', lambda event: change_color())
+
+
