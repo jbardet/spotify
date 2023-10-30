@@ -7,7 +7,9 @@ import os.path
 import pandas as pd
 import numpy as np
 from todoist_api_python.api import Task
-from todoist.api import TodoistAPI
+from todoist_api_python.api import TodoistAPI
+import requests
+import pytz
 
 from helpers import add_website_link
 
@@ -26,10 +28,11 @@ class Todoist():
 
         self.tasks = self.get_tasks()
 
-    def get_completed_todoist_items(self, user_completed_stats):
+    def get_completed_todoist_items(self, user_completed_stats, headers, tasks_last_save):
         # create df from initial 50 completed tasks
         print("Collecting Initial 50 Completed Todoist Tasks...")
-        temp_tasks_dict = (self.api.completed.get_all(limit=50))
+        # you can add completed since as parameter
+        temp_tasks_dict = requests.get('https://api.todoist.com/sync/v9/completed/get_all', headers=headers).json()
         past_tasks = pd.DataFrame.from_dict(temp_tasks_dict['items'])
         # get the remaining items
         pager = list(range(50,user_completed_stats,50))
@@ -39,35 +42,54 @@ class Todoist():
             past_tasks = pd.concat([past_tasks, tmp_tasks_df])
             print("Collecting Additional Todoist Tasks " + str(item) + " of " + str(user_completed_stats))
         # save to CSV
+        print(len(past_tasks))
+        for i, past_task in past_tasks.iterrows():
+            if datetime.datetime.strptime(past_task['completed_at'], "%Y-%m-%dT%H:%M:%S.%fZ").date() < datetime.datetime.strptime(tasks_last_save[0], '%Y-%m-%d').date():
+                past_task.drop(i, inplace=True)
+                # if datetime.datetime.strptime(past_task['completed_at'], "%Y-%m-%dT%H:%M:%S.%fZ")
+        print(len(past_tasks))
         print("...Generating CSV Export")
-        past_tasks.to_csv("data/todost-raw-tasks-completed.csv", index=False)
+        return past_tasks
+        # past_tasks.to_csv("data/todost-raw-tasks-completed.csv", index=False)
 
     # get project info from Todoist API
     def get_todoist_project_name(self, project_id):
-        item = self.api.projects.get_by_id(project_id)
+        item = self.api.get_project(project_id = project_id)
         if item:
             try:
-                return item['name']
+                return item.name
             except:
-                return item['project']['name']
+                return item.project.name
 
-    def weekly_save(self):
-        self.api = TodoistAPI(self.__token)
+    def save_data(self, last_save: datetime.datetime) -> None:
+        try:
+            tasks_saved = pd.read_csv('data/todoist_tasks_completed.csv')
+            # tasks_saved.sort_values(['date', 'hour'], inplace=True)
+            # tasks_saved.to_csv('data/todoist_tasks_completed.csv')
+            tasks_last_save = [tasks_saved['date'].iloc[-1], tasks_saved['hour'].iloc[-1]]
+        except FileNotFoundError:
+            tasks_last_save = ['2023-10-10', 0]
+        self.api = TodoistAPI(self.__key)
 
-        # get user current projects
-        user_projects  = self.api.state['projects']
-        with open('data/todoist-projects.csv', 'w') as file:
-            file.write("Id" + "," + "Project" + "\n")
-            for i in range(0, len(user_projects)):
-                file.write('\"' + str(user_projects[i]['id']) + '\"' + "," + '\"' + str(user_projects[i]['name']) + '\"' + "\n")
-        projects = pd.read_csv("data/todoist-projects.csv")
+        # # get user current projects
+        # user_projects  = self.api.get_projects()
+        # with open('data/todoist-projects.csv', 'w') as file:
+        #     file.write("Id" + "," + "Project" + "\n")
+        #     for i in range(0, len(user_projects)):
+        #         file.write('\"' + str(user_projects[i].id) + '\"' + "," + '\"' + str(user_projects[i].name) + '\"' + "\n")
+        # projects = pd.read_csv("data/todoist-projects.csv")
+
+        headers = {'Authorization': f'Bearer {self.__key}'}
+        # r = requests.get('https://api.todoist.com/sync/v9/completed/get_all', headers=headers).json()
+        # stats = requests.get('https://api.todoist.com/sync/v9/completed/get_stats', headers=headers).json()
+        # print(r.json())
 
         # user completed stats info
-        stats = self.api.completed.get_stats()
+        stats = requests.get('https://api.todoist.com/sync/v9/completed/get_stats', headers=headers).json()
         # total completed tasks from stats
         user_completed_stats = stats['completed_count']
-        self.get_completed_todoist_items(user_completed_stats)
-        past_tasks = pd.read_csv("data/todost-raw-tasks-completed.csv")
+        past_tasks = self.get_completed_todoist_items(user_completed_stats, headers, tasks_last_save)
+        # past_tasks = pd.read_csv("data/todost-raw-tasks-completed.csv")
 
         # get all current and previous projects
         # Extract all project ids used on tasks
@@ -84,7 +106,7 @@ class Todoist():
         past_tasks['project_name'] = past_tasks['project_id'].apply(project_lookup) # note: not very efficient
 
         # functions to convert UTC to Switzerland time zone and extract date/time elements
-        convert_tz = lambda x: x.to_pydatetime().replace(tzinfo=np.pytz.utc).astimezone(np.pytz.timezone('Europe/Zurich'))
+        convert_tz = lambda x: x.to_pydatetime().replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Europe/Zurich'))
         get_year = lambda x: convert_tz(x).year
         get_month = lambda x: '{}-{:02}'.format(convert_tz(x).year, convert_tz(x).month) #inefficient
         get_date = lambda x: '{}-{:02}-{:02}'.format(convert_tz(x).year, convert_tz(x).month, convert_tz(x).day) #inefficient
@@ -93,17 +115,25 @@ class Todoist():
         get_day_of_week = lambda x: convert_tz(x).weekday()
 
         # parse out date and time elements as Switzerland time
-        past_tasks['completed_date'] = pd.to_datetime(past_tasks['completed_date'])
-        past_tasks['year'] = past_tasks['completed_date'].map(get_year)
-        past_tasks['month'] = past_tasks['completed_date'].map(get_month)
-        past_tasks['date'] = past_tasks['completed_date'].map(get_date)
-        past_tasks['day'] = past_tasks['completed_date'].map(get_day)
-        past_tasks['hour'] = past_tasks['completed_date'].map(get_hour)
-        past_tasks['dow'] = past_tasks['completed_date'].map(get_day_of_week)
-        past_tasks = past_tasks.drop(labels=['completed_date'], axis=1)
+        past_tasks['completed_at'] = pd.to_datetime(past_tasks['completed_at'])
+        past_tasks['year'] = past_tasks['completed_at'].map(get_year)
+        past_tasks['month'] = past_tasks['completed_at'].map(get_month)
+        past_tasks['date'] = past_tasks['completed_at'].map(get_date)
+        past_tasks['day'] = past_tasks['completed_at'].map(get_day)
+        past_tasks['hour'] = past_tasks['completed_at'].map(get_hour)
+        # dow is day of the week, 0 = Monday, 6 = Sunday
+        past_tasks['dow'] = past_tasks['completed_at'].map(get_day_of_week)
+        session_dict = {}
+        for section in past_tasks['section_id'].unique():
+            session_dict[section] = self.api.get_section(section_id="137257370").name
+        past_tasks['section'] = [session_dict[sess] for sess in past_tasks['section_id']]
+        past_tasks = past_tasks.drop(labels=['completed_at'], axis=1)
+        # for i, row in past_tasks.iterrows():
+        #     task = requests.get("https://api.todoist.com/sync/v9/items/get", headers=headers, data={'item_id': row['id']})
 
         # save to CSV
-        past_tasks.to_csv("data/todost-tasks-completed.csv", index=False)
+        past_tasks.to_csv("data/todoist-tasks-completed.csv", index=False)
+        print("finished")
 
     def get_tasks(self) -> List[Task]:
         """
@@ -113,6 +143,7 @@ class Todoist():
         :return: the list of tasks to do
         :rtype: List[Task]
         """
+        # # maybe need to use this: api.get_project(project_id="2203306141") with only work project id
         # api = TodoistAPI(self.__key)
         # today = datetime.datetime.now()
         # after_tomorrow = f"{today.month}/{today.day+2}"

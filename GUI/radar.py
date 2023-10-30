@@ -376,18 +376,18 @@ class Radar():
         #     boundaries = self.modify_boundaries(boundaries, factor)
         return songs
 
-    def modify_boundaries(self, boundaries: List[float, float],
-                          factor: int) -> List[float, float]:
+    def modify_boundaries(self, boundaries: List[float],
+                          factor: int) -> List[float]:
         """
         Modify the boundaries of the variables to search for more songs in the
         database
 
         :param boundaries: _description_
-        :type boundaries: List[float, float]
+        :type boundaries: List[float]
         :param factor: _description_
         :type factor: int
         :return: _description_
-        :rtype: List[float, float]
+        :rtype: List[float]
         """
         boundaries = [boundary*factor for boundary in boundaries]
         return boundaries

@@ -51,8 +51,26 @@ class Fitbit:
                                     refresh_token=self.__refresh_token)
 
     def save_data(self):
-
-        last_save = "2023-10-22"
+        try:
+            with open('data/fitbit_intraday.csv', 'r') as f:
+                intraday_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_day.csv', 'r') as f:
+                day_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_spo2.csv', 'r') as f:
+                spo2_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_hrv.csv', 'r') as f:
+                hrv_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_activities.csv', 'r') as f:
+                activities_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_sleep_daily.csv', 'r') as f:
+                sleep_daily_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_sleep_intrad.csv', 'r') as f:
+                sleep_intrad_df_saved = pd.read_csv(f, index_col=0)
+            with open('data/fitbit_azm.csv', 'r') as f:
+                azm_df_saved = pd.read_csv(f, index_col=0)
+            last_save = day_df['date'].iloc[-1]
+        except FileNotFoundError:
+            last_save = "2023-10-30"
         today = str(datetime.datetime.now().strftime("%Y-%m-%d"))
         # list of dates to check
         dates_list = []
@@ -203,20 +221,20 @@ class Fitbit:
             except IndexError:
                 day_dict['temp'].append(np.nan)
             summary = requests.get(f"https://api.fitbit.com/1/user/{self.__user_id}/activities/date/{date}.json", headers = headers).json()
-            day_dict['activeScore'].append(summary['activeScore'])
-            day_dict['caloriesBMR'].append(summary['caloriesBMR'])
-            day_dict['caloriesOut'].append(summary['caloriesOut'])
-            day_dict['restingHeartRate'].append(summary['restingHeartRate'])
-            day_dict['marginalCalories'].append(summary['marginalCalories'])
+            day_dict['activeScore'].append(summary['summary']['activeScore'])
+            day_dict['caloriesBMR'].append(summary['summary']['caloriesBMR'])
+            day_dict['caloriesOut'].append(summary['summary']['caloriesOut'])
+            day_dict['restingHeartRate'].append(summary['summary']['restingHeartRate'])
+            day_dict['marginalCalories'].append(summary['summary']['marginalCalories'])
             # zones are Out of range (30-105bpm), Fat Burn (105-134bpm), Cardio (134-171bpm), Peak (171-220bpm)
-            day_dict['out_of_range_calories_out'].append(summary['heartRateZones'][0]['caloriesOut'])
-            day_dict['fat_burn_calories_out'].append(summary['heartRateZones'][1]['caloriesOut'])
-            day_dict['cardio_calories_out'].append(summary['heartRateZones'][2]['caloriesOut'])
-            day_dict['peak_calories_out'].append(summary['heartRateZones'][3]['caloriesOut'])
-            day_dict['out_of_range_minutes'].append(summary['heartRateZones'][0]['minutes'])
-            day_dict['fat_burn_minutes'].append(summary['heartRateZones'][1]['minutes'])
-            day_dict['cardio_minutes'].append(summary['heartRateZones'][2]['minutes'])
-            day_dict['peak_minutes'].append(summary['heartRateZones'][3]['minutes'])
+            day_dict['out_of_range_calories_out'].append(summary['summary']['heartRateZones'][0]['caloriesOut'])
+            day_dict['fat_burn_calories_out'].append(summary['summary']['heartRateZones'][1]['caloriesOut'])
+            day_dict['cardio_calories_out'].append(summary['summary']['heartRateZones'][2]['caloriesOut'])
+            day_dict['peak_calories_out'].append(summary['summary']['heartRateZones'][3]['caloriesOut'])
+            day_dict['out_of_range_minutes'].append(summary['summary']['heartRateZones'][0]['minutes'])
+            day_dict['fat_burn_minutes'].append(summary['summary']['heartRateZones'][1]['minutes'])
+            day_dict['cardio_minutes'].append(summary['summary']['heartRateZones'][2]['minutes'])
+            day_dict['peak_minutes'].append(summary['summary']['heartRateZones'][3]['minutes'])
             activityCalories_intrad = self.client.intraday_time_series('activities/activityCalories', base_date=date)
             day_dict['activityCalories'].append(int(activityCalories_intrad['activities-activityCalories'][0]['value']))
             if len(activityCalories_intrad['activities-activityCalories'])>1:
@@ -312,22 +330,6 @@ class Fitbit:
                     sleep_daily_dict['restless_count'].append(sleep_session['levels']['summary']['restless']['count'])
                     sleep_daily_dict['restless_minutes'].append(sleep_session['levels']['summary']['restless']['minutes'])
 
-
-        intraday_df = pd.DataFrame(intraday_dict)
-        intraday_df.to_csv('data/fitbit_intraday.csv')
-        day_df = pd.DataFrame.from_dict(day_dict)
-        day_df.to_csv('data/fitbit_day.csv')
-        spo2_df = pd.DataFrame.from_dict(spo2_dict)
-        spo2_df.to_csv('data/fitbit_spo2.csv')
-        hrv_df = pd.DataFrame.from_dict(hrv_dict)
-        hrv_df.to_csv('data/fitbit_hrv.csv')
-        activities_df = pd.DataFrame.from_dict(activities_dict)
-        activities_df.to_csv('data/fitbit_activities.csv')
-        sleep_daily_df = pd.DataFrame.from_dict(sleep_daily_dict)
-        sleep_daily_df.to_csv('data/fitbit_sleep_daily.csv')
-        sleep_intrad_df = pd.DataFrame.from_dict(sleep_intrad_dict)
-        sleep_intrad_df.to_csv('data/fitbit_sleep_intrad.csv')
-
         # Get Active Zone Minutes as as Time Series
         azm_dict = {
             'date': [],
@@ -349,7 +351,40 @@ class Fitbit:
                     azm_dict[key].append(np.nan)
         # Same intraday (does not work but I think it is useless to have this precise)
         # azm_ts_intrad = self.client.intraday_time_series('activities/active-zone-minutes', base_date=date2)
-        azm_df = pd.DataFrame.from_dict(azm_dict)
+
+        intraday_df_added = pd.DataFrame(intraday_dict)
+        day_df_added = pd.DataFrame.from_dict(day_dict)
+        spo2_df_added = pd.DataFrame.from_dict(spo2_dict)
+        hrv_df_added = pd.DataFrame.from_dict(hrv_dict)
+        activities_df_added = pd.DataFrame.from_dict(activities_dict)
+        sleep_daily_df_added = pd.DataFrame.from_dict(sleep_daily_dict)
+        sleep_intrad_df_added = pd.DataFrame.from_dict(sleep_intrad_dict)
+        azm_df_added = pd.DataFrame.from_dict(azm_dict)
+        try:
+            intraday_df = pd.concat([intraday_df_saved, intraday_df_added], ignore_index=True)
+            day_df = pd.concat([day_df_saved, day_df_added], ignore_index=True)
+            spo2_df = pd.concat([spo2_df_saved, spo2_df_added], ignore_index=True)
+            hrv_df = pd.concat([hrv_df_saved, hrv_df_added], ignore_index=True)
+            activities_df = pd.concat([activities_df_saved, activities_df_added], ignore_index=True)
+            sleep_daily_df = pd.concat([sleep_daily_df_saved, sleep_daily_df_added], ignore_index=True)
+            sleep_intrad_df = pd.concat([sleep_intrad_df_saved, sleep_intrad_df_added], ignore_index=True)
+            azm_df = pd.concat([azm_df_saved, azm_df_added], ignore_index=True)
+        except UnboundLocalError:
+            intraday_df = intraday_df_added
+            day_df = day_df_added
+            spo2_df = spo2_df_added
+            hrv_df = hrv_df_added
+            activities_df = activities_df_added
+            sleep_daily_df = sleep_daily_df_added
+            sleep_intrad_df = sleep_intrad_df_added
+            azm_df = azm_df_added
+        intraday_df.to_csv('data/fitbit_intraday.csv')
+        day_df.to_csv('data/fitbit_day.csv')
+        spo2_df.to_csv('data/fitbit_spo2.csv')
+        hrv_df.to_csv('data/fitbit_hrv.csv')
+        activities_df.to_csv('data/fitbit_activities.csv')
+        sleep_daily_df.to_csv('data/fitbit_sleep_daily.csv')
+        sleep_intrad_df.to_csv('data/fitbit_sleep_intrad.csv')
         azm_df.to_csv('data/fitbit_azm.csv')
 
         # # Get Activity Log List TODO: need to save data
@@ -361,8 +396,6 @@ class Fitbit:
         # favorite_activities = self.client.favorite_activities()
         # frequent_activities = self.client.frequent_activities()
         # goals = activities['goals']
-
-        print("oe")
 
 def fill_dic(data, t):
     dic = []

@@ -8,6 +8,7 @@ import hashlib
 import os
 import json
 import datetime
+import pickle
 from colour import Color
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
@@ -15,6 +16,7 @@ import requests
 import matplotlib.pyplot as plt
 from rauth import OAuth2Service
 from urllib.parse import parse_qsl
+from datetime import timedelta as td
 
 from helpers import add_website_link
 
@@ -54,104 +56,432 @@ class RescueWakaTime():
         # self.test_wakatime()
         # self.weekly_save()
 
-    def test_wakatime(self):
-
-        # # OAuth 2.0 authentication needs to visit a page to get a link -> not automatic
-        # # So I will use an API key for now
-        # if sys.version_info[0] == 3:
-        #     raw_input = input
-
-        # client_id = ""
-        # client_secret = ""
-
-        # self.wakatime_service = OAuth2Service(
-        #     client_id=client_id,  # your App ID from https://wakatime.com/apps
-        #     client_secret=client_secret,  # your App Secret from https://wakatime.com/apps
-        #     name='wakatime',
-        #     authorize_url='https://wakatime.com/oauth/authorize',
-        #     access_token_url='https://wakatime.com/oauth/token',
-        #     base_url='https://wakatime.com/api/v1/')
-        # redirect_uri = 'https://wakatime.com/oauth/test'
-        # state = hashlib.sha1(os.urandom(40)).hexdigest()
-        # params = {'scope': 'email,read_stats,read_logged_time,read_private_leaderboards',
-        #         'response_type': 'code',
-        #         'state': state,
-        #         'redirect_uri': redirect_uri}
-
-        # url = self.wakatime_service.get_authorize_url(**params)
-        # print(url)
-        # headers = {'Accept': 'application/x-www-form-urlencoded'}
-        # code = raw_input('Enter code from url: ')
-        # session = self.wakatime_service.get_auth_session(headers=headers,
-        #                                                  data={'code': code,
-        #                                                        'grant_type': 'authorization_code',
-        #                                                        'redirect_uri': redirect_uri})
-        # user = session.get('users/current').json()
-        # stats = session.get('users/current/stats')
-
-        # # refresh token
-        # refresh_token = dict(parse_qsl(session.access_token_response.text))['refresh_token']
-        # data = {
-        #     'grant_type': 'refresh_token',
-        #     'client_id': client_id,
-        #     'client_secret': client_secret,
-        #     'refresh_token': refresh_token,
-        # }
-        # resp = requests.post('https://wakatime.com/oauth/token', data=data)
-
-        # print(user)
-        # print(stats.text)
-        # extra_params = {'start': '2023-10-20', 'end': '2023-10-23'}
-        # summaries = session.get('users/current/summaries', params=extra_params).json()
-        # print("oe")
-
-        # header = {
-        #     'Authorization': f'Basic ' + api_key,
-        #     'scope': 'email,read_stats,read_logged_time,read_private_leaderboards'
-        # }
-        extra_params = {'start': '2023-10-20', 'end': '2023-10-23'}
-        summary_call = "https://wakatime.com/api/v1/users/current/summaries?api_key="+self.__waka_key
-        # response = requests.get(summary_call, params=extra_params).json() # headers = header
-
-    def weekly_save(self):
+    def save_data(self):
         """
         Save the weekly data from the API in a json file
         """
+        # get the last save from the last csv file
+        try:
+            activities_saved = pd.read_csv('data/rescuetime_activities.csv')
+            activities_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+            # activities_saved.sort_values(by='date', inplace=True)
+            # activities_saved.to_csv('data/rescuetime_activities.csv')
+            activities_last_save = activities_saved['date'].iloc[-1]
+            summary_saved = pd.read_csv('data/rescuetime_summary.csv')
+            summary_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+            # summary_saved.sort_values(by='date', inplace=True)
+            # summary_saved.to_csv('data/rescuetime_summary.csv')
+            summary_last_save = activities_saved['date'].iloc[-1]
+            overview_saved = pd.read_csv('data/rescuetime_overview.csv')
+            overview_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+            # overview_saved.sort_values(by='date', inplace=True)
+            # overview_saved.to_csv('data/rescuetime_overview.csv')
+            overview_last_save = overview_saved['date'].iloc[-1]
+        except FileNotFoundError:
+            activities_last_save = '2023-10-10 06:00:00'
+            summary_last_save = '2023-10-10'
+            overview_last_save = '2023-10-10 06:00:00'
+        activities_date_save = datetime.datetime.strptime(activities_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
+        overview_date_save = datetime.datetime.strptime(overview_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
+        summary_date_save = datetime.datetime.strptime(summary_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
+        # last_save = '2023-10-10'
+        restrict_source_types = ['computers', 'mobile', 'offline']
+        today = datetime.date.today()
+        # today = datetime.datetime.strptime('2023-10-20', '%Y-%m-%d').date()
+        activities_dict = {
+            'date': [],
+            'time': [],
+            'activity': [],
+            'category': [],
+            'document': [],
+            'productivity': [],
+            'device': []
+        }
+        overview_dict = {
+            'date': [],
+            'time': [],
+            'category': [],
+            'device': []
+        }
+
         # RescueTime
         baseurl = 'https://www.rescuetime.com/anapi/data?key='
         url = baseurl+self.__rescue_key
-        today = datetime.date.today()
-        last_save = "2023-10-10"
-        activities_list = rescuetime_get_activities(url, today, last_save)
 
-        # Get the data by day
-        # activities_day_log = rescuetime_get_activities(start_date, end_date, 'day')
-        # activities_daily = pd.DataFrame.from_dict(activities_day_log)
-        # activities_daily.info()
-        # activities_daily.describe()
-        # activities_daily.tail()
+        for restrict_source_type in restrict_source_types:
+            # Configuration for Query
+            payload = {
+                'perspective':'interval',
+                'resolution_time': 'minute', #1 of "month", "week", "day", "hour", "minute"
+                'restrict_kind': 'document', # 'document', 'activity'
+                'restrict_begin': activities_date_save,
+                'restrict_end': today,
+                'format':'json', #csv
+                'restrict_source_type': restrict_source_type
+            }
 
-        # Get the data by hour
-        # activities_hour_log = rescuetime_get_activities(start_date, end_date, 'hour')
-        # activities_hourly = pd.DataFrame.from_dict(activities_hour_log)
-        # activities_hourly.columns = ['Date', 'Seconds', 'NumberPeople', 'Actitivity', 'Document', 'Category', 'Productivity']
-        # activities_hourly.info()
-        # activities_hourly.describe()
-        # activities_hourly.tail()
-        # activities_hourly.to_csv('data/rescuetime-hourly-' + start_date + '-to-' + end_date + '.csv')
+            # Setup Iteration - by Day
+            d1 = datetime.datetime.strptime(payload['restrict_begin'], "%Y-%m-%d").date()
+            d2 = payload['restrict_end']
+            delta = d2 - d1
 
-        # Get the data by minute
-        # activities_minute_log = rescuetime_get_activities(start_date, end_date, 'minute')
-        # activities_per_minute = pd.DataFrame.from_dict(activities_minute_log)
-        # Date', u'Time Spent (seconds)', u'Number of People', u'Activity', u'Document', u'Category', u'Productivity'
-        # activities_per_minute.columns = ['Date', 'Seconds', 'NumberPeople', 'Actitivity', 'Document', 'Category', 'Productivity']
-        # activities_per_minute.head()
-        # activities_per_minute.info()
-        # activities_per_minute.describe()
-        # activities_per_minute.to_csv('data/rescuetime-by-minute' + start_date + '-to-' + end_date + '.csv')
+            # Iterate through the days, making a request per day
+            for i in range(delta.days + 1):
+                # Find iter date and set begin and end values to this to extract at once.
+                d3 = d1 + td(days=i) # Add a day
+                if d3.day == 1: print('Pulling Monthly Data for ', d3)
+
+                # Update the Payload
+                payload['restrict_begin'] = str(d3) # Set payload days to current
+                payload['restrict_end'] = str(d3)   # Set payload days to current
+
+                # Request
+                try:
+                    r = requests.get(url, payload) # Make Request
+                    iter_result = r.json() # Parse result
+                    # print("Collecting Activities for " + str(d3))
+                except:
+                    print("Error collecting data for " + str(d3))
+
+                if len(iter_result) != 0:
+                    for i in iter_result['rows']:
+                        activities_dict['date'].append(datetime.datetime.strptime(i[0], "%Y-%m-%dT%H:%M:%S"))
+                        activities_dict['time'].append(i[1])
+                        activities_dict['activity'].append(i[3])
+                        activities_dict['document'].append(i[4])
+                        activities_dict['category'].append(i[5])
+                        activities_dict['productivity'].append(i[6])
+                        activities_dict['device'].append(restrict_source_type)
+                else:
+                    print("Appears there is no RescueTime data for " + str(d3))
+
+            # Setup Iteration - by Day for overview
+            d1 = datetime.datetime.strptime(overview_date_save, "%Y-%m-%d").date()
+            d2 = today
+            delta = d2 - d1
+
+            # Iterate through the days, making a request per day
+            for i in range(delta.days + 1):
+                # Find iter date and set begin and end values to this to extract at once.
+                d3 = d1 + td(days=i) # Add a day
+                # Request
+                try:
+                    overview_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=interval&restrict_kind=overview&restrict_begin={str(d3)}&restrict_end={str(d3)}&resolution=minute&format=json&restrict_source_type={restrict_source_type}"
+                    overview = requests.get(overview_call).json()
+                    # print("Collecting Activities for " + str(d3))
+                except:
+                    print("Error collecting data for " + str(d3))
+
+                if len(overview) != 0:
+                    for i in overview['rows']:
+                        overview_dict['date'].append(datetime.datetime.strptime(i[0], "%Y-%m-%dT%H:%M:%S"))
+                        overview_dict['time'].append(i[1])
+                        overview_dict['category'].append(i[3])
+                        overview_dict['device'].append(restrict_source_type)
+                else:
+                    print("Appears there is no RescueTime data for " + str(d3))
+
+        overview_added = pd.DataFrame.from_dict(overview_dict)
+        activities_added = pd.DataFrame.from_dict(activities_dict)
+        # overview_added = pd.read_csv('data/rescuetime_overview_added.csv')
+        # overview_added.drop(['Unnamed: 0'], axis=1, inplace=True)
+        # activities_added = pd.read_csv('data/rescuetime_activities_added.csv')
+        # activities_added.drop(['Unnamed: 0'], axis=1, inplace=True)
+        overview_added.sort_values(by='date', inplace=True)
+        activities_added.sort_values(by='date', inplace=True)
+        # append the loaded dataframe with the one we just created
+        for i, row in overview_added.iterrows():
+            # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
+            # otherwise not
+            # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+            if row['date']<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+                # remove the row
+                overview_added.drop(i, inplace=True)
+            # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+            elif row['date']==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+                len_overview = len(overview_saved)
+                overview_saved.drop(overview_saved[
+                    (overview_saved['date'] == overview_last_save) &
+                    (overview_saved['category'] == row['category']) &
+                    (overview_saved['device'] == row['device'])].index, inplace=True)
+                # assert len_overview-len(overview_saved) == 1
+        for i, row in activities_added.iterrows():
+            # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
+            # otherwise not
+            # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S") < datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
+            if row['date'] < datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
+                # remove the row
+                activities_added.drop(i, inplace=True)
+            # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
+            elif row['date']==datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
+                len_activities = len(activities_saved)
+                activities_saved.drop(activities_saved[
+                    (activities_saved['date'] == activities_last_save) &
+                    (activities_saved['activity'] == row['activity']) &
+                    (activities_saved['category'] == row['category']) &
+                    (activities_saved['document'] == row['document']) &
+                    (activities_saved['productivity'] == row['productivity']) &
+                    (activities_saved['device'] == row['device'])].index, inplace=True)
+                assert len_activities-len(activities_saved) == 1
+        try:
+            overview = pd.concat([overview_saved, overview_added], ignore_index=True)
+        except UnboundLocalError:
+            overview = overview_added
+        try:
+            activities = pd.concat([activities_saved, activities_added], ignore_index=True)
+        except UnboundLocalError:
+            activities = activities_added
+        overview.to_csv('data/rescuetime_overview.csv')
+        activities.to_csv('data/rescuetime_activities.csv')
+
+        summary_dict = {
+            'date': [],
+            'productivity_pulse': [],
+            'very_productive_percentage': [],
+            'productive_percentage': [],
+            'neutral_percentage': [],
+            'distracting_percentage': [],
+            'very_distracting_percentage': [],
+            'all_productive_percentage': [],
+            'all_distracting_percentage': [],
+            'uncategorized_percentage': [],
+            'business_percentage': [],
+            'communication_and_scheduling_percentage': [],
+            'social_networking_percentage': [],
+            'design_and_composition_percentage': [],
+            'entertainment_percentage': [],
+            'news_percentage': [],
+            'software_development_percentage': [],
+            'reference_and_learning_percentage': [],
+            'shopping_percentage': [],
+            'utilities_percentage': [],
+            'total_hours': [],
+            'very_productive_hours': [],
+            'productive_hours': [],
+            'neutral_hours': [],
+            'distracting_hours': [],
+            'very_distracting_hours': [],
+            'all_productive_hours': [],
+            'all_distracting_hours': [],
+            'uncategorized_hours': [],
+            'business_hours': [],
+            'communication_and_scheduling_hours': [],
+            'social_networking_hours': [],
+            'design_and_composition_hours': [],
+            'entertainment_hours': [],
+            'news_hours': [],
+            'software_development_hours': [],
+            'reference_and_learning_hours': [],
+            'shopping_hours': [],
+            'utilities_hours': [],
+            'total_duration_formatted': [],
+            'very_productive_duration_formatted': [],
+            'productive_duration_formatted': [],
+            'neutral_duration_formatted': [],
+            'distracting_duration_formatted': [],
+            'very_distracting_duration_formatted': [],
+            'all_productive_duration_formatted': [],
+            'all_distracting_duration_formatted': [],
+            'uncategorized_duration_formatted': [],
+            'business_duration_formatted': [],
+            'communication_and_scheduling_duration_formatted': [],
+            'social_networking_duration_formatted': [],
+            'design_and_composition_duration_formatted': [],
+            'entertainment_duration_formatted': [],
+            'news_duration_formatted': [],
+            'software_development_duration_formatted': [],
+            'reference_and_learning_duration_formatted': [],
+            'shopping_duration_formatted': [],
+            'utilities_duration_formatted': []
+        }
+
+        daily_summary = f"https://www.rescuetime.com/anapi/daily_summary_feed?key={self.__rescue_key}&restrict_begin={summary_date_save}&restrict_end={today}&format=json"
+        summary = requests.get(daily_summary).json() # -> last 14 days
+        for day in summary:
+            for key in day.keys():
+                if key in summary_dict:
+                    summary_dict[key].append(day[key])
+
+        summary_added = pd.DataFrame.from_dict(summary_dict)
+        summary_added = summary_added.reindex(index=summary_added.index[::-1]).reset_index()
+        summary_added.drop(columns = ['index'], inplace=True)
+        try:
+            for i, row in summary_added.iterrows():
+                len_summary = len(summary_saved)
+                summary_saved.drop(summary_saved[summary_saved['date'] == row['date']].index, inplace=True)
+                assert len_summary-len(summary_saved)==1
+            summary = pd.concat([summary_saved, summary_added], ignore_index=True)
+        except UnboundLocalError:
+            summary = summary_added
+        summary.to_csv('data/rescuetime_summary.csv')
+
         print("oe")
+        # summary no need to change
 
-        # Wakatime
+        # # top-level categories:
+        # # top_cat = {
+        # #     'Software Development': ['Visual Studio Code', 'python', 'Github'],
+        # #     'Entertainment': ['twitch.tv', 'VLC Media Player', 'tv.twitch.android.app'],
+        # #     'Communication & Scheduling': ['Gmail', 'WhatsApp Messenger Android', 'web.whatsapp.com'],
+        # #     'Reference & Learning': ['google.com', 'Fitbit for Android', 'dev.fitbit.com'],
+        # #     'Business': ['wakatime.com', 'rescuetime.com', 'RescueTime for Android'],
+        # #     'Utilities': ['Google Chrome for Android', 'Windows Explorer', 'c:'],
+        # #     'Social Networking': ['Instagram for Android', 'linkedin.com'],
+        # #     'Shopping': ['galaxus.ch', 'anibis.ch', 'fr.bikester.ch'],
+        # #     'Design & Composition': ['OneNote', 'Google Documents'],
+        # #     'News & Opinion': ['medium.com', 'ch.admin.meteoswiss'],
+        # #     'Uncategorized': []
+        # # }
+
+        # # WAKATIME
+        # # Warning: 'Coding activity older than 2 weeks is not available on the free plan.'
+        # get the last save from the last csv file
+        try:
+            durations_saved = pd.read_csv('data/wakatime_durations.csv')
+            durations_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+            durations_last_save = durations_saved['time'].iloc[-1]
+            durations_first_save = False
+            heartbeats_saved = pd.read_csv('data/wakatime_heartbeats.csv')
+            heartbeats_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+            heartbeats_last_save = heartbeats_saved['time'].iloc[-1]
+            heartbeats_first_save = False
+        except FileNotFoundError:
+            durations_last_save = '2023-10-20 06:00:00'
+            heartbeats_last_save = '2023-10-20 06:00:00'
+            durations_first_save = True
+            heartbeats_first_save = True
+
+        # extra_params = {'start': '2023-10-19', 'end': '2023-10-24'}
+        heartbeat_call = f"https://wakatime.com/api/v1/users/current/heartbeats?api_key={self.__waka_key}"
+        duration_call = f"https://wakatime.com/api/v1/users/current/durations?api_key={self.__waka_key}"
+        # summary_call = f"https://wakatime.com/api/v1/users/current/summaries?api_key={self.__waka_key}" #&start={start}&end={end}"
+        # summaries = requests.get(summary_call, params=extra_params).json() # headers = header
+        # Setup Iteration - by Day
+        durations_date_save = datetime.datetime.strptime(durations_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
+        heartbeats_date_save = datetime.datetime.strptime(heartbeats_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
+
+        heartbeats_dict = {
+            'entity': [],
+            'type': [],
+            'time': [], #-> convert: datetime.datetime.fromtimestamp(heartbeats['data'][0]['time'])
+            'project': [],
+            'language': [],
+            'dependencies': [],
+            'is_write': [],
+            'category': [],
+            'created_at': [],
+            'machine_name_id': []
+        }
+        durations_dict = {
+            'time': [],
+            'project': [],
+            'duration': []
+        }
+
+
+        d1 = datetime.datetime.strptime(heartbeats_date_save,"%Y-%m-%d").date()
+        d2 = datetime.date.today()
+        delta = d2 - d1
+        # Iterate through the days, making a request per day
+        for i in range(delta.days + 1):
+            # Find iter date and set begin and end values to this to extract at once.
+            d3 = d1 + td(days=i) # Add a day
+            if d3.day == 1: print('Pulling Monthly Data for ', d3)
+
+            extra_params = {'date': d3}
+
+            # Request
+            try:
+                heartbeats = requests.get(heartbeat_call, params=extra_params).json() # Make Request
+                # print("Collecting Activities for " + str(d3))
+            except:
+                print("Error collecting data for " + str(d3))
+
+            if len(heartbeats) != 0:
+                for i in heartbeats['data']:
+                    # entity, type, time -> convert: datetime.datetime.fromtimestamp(heartbeats['data'][0]['time'])
+                    # project, language, dependencies, is_write, category, created_at, machine_name_id
+                    heartbeats_dict['entity'].append(i['entity'])
+                    heartbeats_dict['type'].append(i['type'])
+                    heartbeats_dict['time'].append(datetime.datetime.fromtimestamp(i['time']))
+                    heartbeats_dict['project'].append(i['project'])
+                    heartbeats_dict['language'].append(i['language'])
+                    heartbeats_dict['dependencies'].append(i['dependencies'])
+                    heartbeats_dict['is_write'].append(i['is_write'])
+                    heartbeats_dict['category'].append(i['category'])
+                    heartbeats_dict['created_at'].append(i['created_at'])
+                    heartbeats_dict['machine_name_id'].append(i['machine_name_id'])
+            else:
+                print("Appears there is no WakaTime heartbeats data for " + str(d3))
+
+
+        d1 = datetime.datetime.strptime(durations_date_save,"%Y-%m-%d").date()
+        d2 = datetime.date.today()
+        delta = d2 - d1
+        # Iterate through the days, making a request per day
+        for i in range(delta.days + 1):
+            # Find iter date and set begin and end values to this to extract at once.
+            d3 = d1 + td(days=i) # Add a day
+            if d3.day == 1: print('Pulling Monthly Data for ', d3)
+
+            extra_params = {'date': d3}
+            # Request
+            try:
+                durations = requests.get(duration_call, params=extra_params).json() # Make Request
+                # print("Collecting Activities for " + str(d3))
+            except:
+                print("Error collecting data for " + str(d3))
+            if len(durations) != 0:
+                for i in durations['data']:
+                    durations_dict['time'].append(datetime.datetime.fromtimestamp(i['time']))
+                    durations_dict['project'].append(i['project'])
+                    durations_dict['duration'].append(i['duration'])
+            else:
+                print("Appears there is no WakaTime durations data for " + str(d3))
+
+        durations_added = pd.DataFrame.from_dict(durations_dict)
+        heartbeats_added = pd.DataFrame.from_dict(heartbeats_dict)
+        if not durations_first_save:
+            for i, row in durations_added.iterrows():
+                # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
+                # otherwise not
+                # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+                if row['time']<datetime.datetime.strptime(durations_last_save, "%Y-%m-%d %H:%M:%S.%f"):
+                    # remove the row
+                    durations_added.drop(i, inplace=True)
+                # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+                elif row['time']==datetime.datetime.strptime(durations_last_save, "%Y-%m-%d %H:%M:%S.%f"):
+                    len_overview = len(durations_saved)
+                    durations_saved.drop(durations_saved[
+                        (durations_saved['time'] == durations_last_save) &
+                        (durations_saved['project'] == row['project'])].index, inplace=True)
+                    assert len_overview-len(durations_saved) == 1
+                durations = pd.concat([durations_saved, durations_added], ignore_index=True)
+        else:
+            durations = durations_added
+        if not heartbeats_first_save:
+            for i, row in heartbeats_added.iterrows():
+                # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
+                # otherwise not
+                # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+                if row['time']<datetime.datetime.strptime(heartbeats_last_save, "%Y-%m-%d %H:%M:%S.%f"):
+                    # remove the row
+                    heartbeats_added.drop(i, inplace=True)
+                # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
+                elif row['time']==datetime.datetime.strptime(heartbeats_last_save, "%Y-%m-%d %H:%M:%S.%f"):
+                    len_heartbeats = len(heartbeats_saved)
+                    heartbeats_saved.drop(heartbeats_saved[
+                        (heartbeats_saved['time'] == heartbeats_last_save) &
+                        (heartbeats_saved['entity'] == row['entity']) &
+                        (heartbeats_saved['type'] == row['type']) &
+                        (heartbeats_saved['project'] == row['project'])].index, inplace=True)
+                    assert len_heartbeats-len(heartbeats_saved) == 1
+                heartbeats = pd.concat([heartbeats_saved, heartbeats_added], ignore_index=True)
+        else:
+            heartbeats = heartbeats_added
+        durations.to_csv('data/wakatime_durations.csv')
+        heartbeats.to_csv('data/wakatime_heartbeats.csv')
+        print("oe")
 
     def is_rescue_time_on(self) -> bool:
         """
@@ -381,157 +711,3 @@ class RescueWakaTime():
         self.rescue_time_button = tk.Button(self.window, text = text,
                                             command = start_rescue_time)
         self.rescue_time_button.pack(side = tk.TOP)
-
-# Adjustable by Time Period
-def rescuetime_get_activities(url, start_date, end_date, resolution='hour'):
-    # Configuration for Query
-    # SEE: https://www.rescuetime.com/apidoc
-    payload = {
-        'perspective':'interval',
-        'resolution_time': resolution, #1 of "month", "week", "day", "hour", "minute"
-        'restrict_kind':'document',
-        'restrict_begin': start_date,
-        'restrict_end': end_date,
-        'format':'json' #csv
-    }
-
-    # Setup Iteration - by Day
-    d1 = datetime.strptime(payload['restrict_begin'], "%Y-%m-%d").date()
-    d2 = datetime.strptime(payload['restrict_end'], "%Y-%m-%d").date()
-    delta = d2 - d1
-
-    activities_list = []
-
-    # Iterate through the days, making a request per day
-    for i in range(delta.days + 1):
-        # Find iter date and set begin and end values to this to extract at once.
-        d3 = d1 + td(days=i) # Add a day
-        if d3.day == 1: print('Pulling Monthly Data for ', d3)
-
-        # Update the Payload
-        payload['restrict_begin'] = str(d3) # Set payload days to current
-        payload['restrict_end'] = str(d3)   # Set payload days to current
-
-        # Request
-        try:
-            r = requests.get(url, payload) # Make Request
-            iter_result = r.json() # Parse result
-            # print("Collecting Activities for " + str(d3))
-        except:
-            print("Error collecting data for " + str(d3))
-
-        if len(iter_result) != 0:
-            for i in iter_result['rows']:
-                activities_list.append(i)
-        else:
-            print("Appears there is no RescueTime data for " + str(d3))
-
-    return activities_list
-
-# # for the analytic data:
-# # perspective -> rank or interval
-# # resolution_time -> [ 'month' | 'week' | 'day' | 'hour' | 'minute' ]
-# # restrict_begin
-# # restrict_end
-# # restrict_kind -> [ 'category' | 'activity' | 'productivity' | 'document' ]
-# # restrict_thing -> name (of category, activity, or overview)
-# # restrict_thingy
-# # restrict_source_type -> [ 'computers' | 'mobile' | 'offline' ]
-# # restrict_schedule_id -> id (integer id of user's schedule/time filter)
-# productivity_call = f"https://www.rescuetime.com/anapi/data?key={self.__key}&perspective=interval&restrict_kind=productivity&interval=hour&restrict_begin=2023-10-10&restrict_end=2023-10-17&format=json"
-# overview_call = f"https://www.rescuetime.com/anapi/data?key={self.__key}&perspective=rank&restrict_kind=overview&restrict_begin=2023-10-10&restrict_end=2023-10-17&format=json"
-
-# # Daily summary feed
-# daily_summary = f"https://www.rescuetime.com/anapi/daily_summary_feed?key={self.__key}"
-
-# # Alerts feed api Alerts are a premium feature and as such the API will always return zero results for users on the RescueTime Lite plan.
-# # Highlights also premium, FocusTime Feed API also
-# # alert_call = f"https://www.rescuetime.com/anapi/alerts_feed?key={self.__key}&op=list"
-
-# # FocusTime Trigger API -> start/end FocusTime on active devices as an alternative to starting/ending it manually from the desktop app.
-# # duration is in min and -1 if until end of the day (return 200 if ok, 400 if fails)
-# start_call = f"https://www.rescuetime.com/anapi/start_focustime?key={self.__key}&duration=30"
-# end_call = f"https://www.rescuetime.com/anapi/end_focustime?key={self.__key}"
-
-# # Offline Time POST API -> add offline time to a user's account (200/400), t in minutes, detail is optional
-# offline_call = f"https://www.rescuetime.com/anapi/offline_time_post?key={self.__key}"
-# offline_json = {
-#     "start_time": "2020-01-01 09:00:00",
-#     "duration": 60,
-#     "activity_name": "Meeting",
-#     "activity_details": "Daily Planning"
-#     }
-
-# WAKATIME
-
-# ['data'], ['is_up_to_date', 'range', 'timeout', 'percent_calculated', 'total_seconds', 'text', 'decimal', 'digital']
-# all_time_since_today = session.get('users/current/all_time_since_today').json()
-# # need date, ['data'], list of {'time': 1697948285.120785, 'project': 'spotify', 'duration': 3081.478932, 'color': None}
-# extra_params = {'date': '2023-10-22'}
-# durations = session.get('users/current/durations', params=extra_params).json()
-# # need date, ['data'], gives nothing?
-# external_durations = session.get('users/current/external_durations', params=extra_params).json()
-# # goal = session.get('users/current/goals/:goal').text
-# # empty for now
-# goals = session.get('users/current/goals').json()
-# # need date, ['data'], list of dict_keys(['id', 'entity', 'type', 'time', 'project', 'project_root_count', 'branch', 'language', 'dependencies', 'lines', 'lineno', 'cursorpos', 'is_write', 'category', 'created_at', 'user_id', 'user_agent_id', 'machine_name_id'])
-# heartbeats = session.get('users/current/heartbeats', params=extra_params).json()
-# # replace:
-# # insight_type = days, best_day, daily_average, projects, languages, editors, categories, machines, or operating_systems
-# # range = YYYY, YYYY-MM, last_7_days, last_30_days, last_6_months, last_year, or all_time
-# # for accounts subscribed to the free plan, time ranges >= one year are updated on the first request.
-# # e.g. daily_average last_7_days -> premium only -> only works with last_year: 'current_user': {'total': {'seconds': 25430.510746, 'text': '7 hrs 3 mins'}, 'daily_average': {'seconds': 69, 'text': '1 min'}}
-# # days -> last_year only -> list of 365 days with 'date0, 'total' 'categories' [{'name': 'Debugging', 'total': 2273.59264}, {'name': 'Coding', 'total': 415.909864}]
-# # projects -> last_year only -> [{'total_seconds': 21621.457172, 'name': 'spotify'}, {'total_seconds': 1435.964871, 'name': 'personal-influxdb'}]
-# # languages -> last_year only ->  [{'name': 'Python', 'total_seconds': 23041.451302}, {'name': 'Other', 'total_seconds': 15.970741}
-# # editors -> last_year only -> [{'total_seconds': 23057.422043, 'name': 'VS Code'}]
-# # categories -> last_year only -> [{'name': 'Coding', 'total_seconds': 11818.206905}, {'name': 'Debugging', 'total_seconds': 11239.215138}]
-# # machines -> last_year only -> [{'total_seconds': 23057.422043, 'name': 'DESKTOP-L58EQH4', 'machine_name_id': '018b4c4e-87d3-487a-b...e649819022'}]
-# # operating_systems -> last_year only -> [{'total_seconds': 23057.422043, 'name': 'Windows'}]
-# # insights = session.get('users/current/insights/:insight_type/:range').json()
-
-# # not very useful
-# leaders = session.get('/api/v1/leaders').json()
-# # list ['id', 'value', 'ip', 'timezone', 'last_seen_at', 'created_at', 'name']
-# machine_names = session.get('users/current/machine_names').json()
-# # empty
-# leaderboards = session.get('users/current/leaderboards').json()
-# # useless
-# languages = session.get('/api/v1/program_languages').json()
-# # list of ['id', 'name', 'color', 'last_heartbeat_at', 'created_at', 'badge', 'clients', 'repository', 'human_readable_last_heartbeat_at', 'url', 'urlencoded_name', 'has_public_url']
-# projects = session.get('users/current/projects').json()
-# # ? ['status', 'is_up_to_date', 'is_up_to_date_pending_future', 'is_stuck', 'is_already_updating', 'range', 'percent_calculated', 'timeout', 'writes_only', 'username', 'is_including_today', 'human_readable_range', 'is_coding_activity_visible', 'is_other_usage_visible']
-# stats = session.get('users/current/stats').json()
-# # rabge can be YYYY-MM, last_7_days, last_30_days, last_6_months, last_year, or all_time
-# # stats_range = session.get('users/current/stats/:range').text
-# # ['grand_total', 'range', 'projects', 'languages', 'dependencies', 'machines', 'editors', 'operating_systems', 'categories']
-# status_bar = session.get('users/current/status_bar/today').json()
-# # need start and end date
-# # 'data' -> ['languages', 'grand_total', 'editors', 'operating_systems', 'categories', 'dependencies', 'machines', 'projects', 'range'])
-# # 'cumulative_total': {'seconds': 26447.587896, 'text': '7 hrs 20 mins', 'digital': '7:20', 'decimal': '7.33'}
-# # ['daily_average']: ['holidays', 'days_minus_holidays', 'days_including_holidays', 'seconds', 'seconds_including_other_language', 'text', 'text_including_other_language'])
-# extra_params = {'start': '2023-10-20', 'end': '2023-10-23'}
-# summaries = session.get('users/current/summaries', params=extra_params).json()
-# # list of ['id', 'value', 'created_at', 'os', 'version', 'go_version', 'last_seen_at', 'editor', 'cli_version']
-# user_agents = session.get('users/current/user_agents').json()
-# # information on user
-# _user = session.get('users/current').json()
-# dict = {"all_time_since_today": all_time_since_today,
-#         "durations": durations,
-#         "external_durations": external_durations,
-#         "goals": goals,
-#         "heartbeats": heartbeats,
-#         "leaders": leaders,
-#         "machine_names": machine_names,
-#         "leaderboards": leaderboards,
-#         "languages": languages,
-#         "projects": projects,
-#         "stats": stats,
-#         "status_bar": status_bar,
-#         "summaries": summaries,
-#         "user_agents": user_agents,
-#         "_user": _user}
-# import pickle
-# import ast
-# with open('./Wakatime/wakatime.pickle', 'wb') as file:
-#     pickle.dump(dict, file)
