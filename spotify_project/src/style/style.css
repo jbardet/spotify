@@ -16,6 +16,22 @@ to
 	box-sizing: border-box;
 }
 
+/* Position the h1 element at the upper left corner of the window */
+h1 {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+    padding: 10px;
+	font-size: 20px;
+}
+/*
+#RT {
+	position: absolute;
+	top: 0;
+	left: -100px;
+} */
+
 /*
 Make the document fill the whole viewport, this overrides any weird defaults that browsers might have.
 */
@@ -26,25 +42,36 @@ html, body, figure {
 	border: 0;
 }
 
-/* Default font and size */
+#RT {
+    position: relative;
+}
+
+/*
+Default font and size
+*/
+body{
+	margin-top: 40px;
+}
+/*
 body {
 
 	width: 100vw;
 	height: 100vh;
 
 	/* center vertically */
-	display: flex;
+	/* display: flex;
 	flex-flow: row nowrap;
 	justify-content: center;
-	align-content: center;
+	align-content: center; */
 
 	/* background behind the plot */
-	background: rgb(255, 255, 255);
+	/* background: rgb(255, 255, 255); */
 
 	/* default text */
-	font-family: sans-serif;
+	/* font-family: sans-serif;
 	font-size: 1.1rem;
-}
+} */
+
 
 /*
 It is easier to read if the text is not too wide, so we limit the width.
@@ -54,6 +81,6 @@ The various units of measurement available in CSS:
 	https://developer.mozilla.org/en-US/docs/Learn/CSS/Introduction_to_CSS/Values_and_units
 */
 
-svg {
+/* svg {
 	margin: 1rem;
-}
+} */
