@@ -114,6 +114,7 @@ d3.csv("data/rescuetime_activities.csv", function(error, data) {
 
     // Initial plot with all data
     updatePlot(filteredData, xAxisGroup, yAxisGroup);
+    updateSubgraphs(filteredData)
 });
 
 function updatePlot(data, xAxisGroup, yAxisGroup) {
@@ -124,7 +125,7 @@ function updatePlot(data, xAxisGroup, yAxisGroup) {
         .entries(data);
 
     // Define an array of all days
-    var numDays = ['0', '1', '2', '3', '4', '5', '6']
+    var numDays = ['1', '2', '3', '4', '5', '6', '0']
     var allDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
     // Create a new array that includes all days
@@ -140,12 +141,11 @@ function updatePlot(data, xAxisGroup, yAxisGroup) {
     x.domain(completeData.map(function(d) { return d.key; }));
     y.domain([0, d3.max(completeData, function(d) { return d.value/3600; })]);
 
-
     // Append the rectangles for the bar chart
     var bars = svg.selectAll(".bar")
         .data(completeData, function(d) { return d.key; }); // Use the day of the week as the key
     bars.exit().remove();
-    bars.enter().append("rect").merge(bars)
+    bars = bars.enter().append("rect").merge(bars)
         .attr("class", "bar")
         .attr("x", function(d) { return x(d.key); })
         .attr("width", x.bandwidth())
@@ -167,4 +167,153 @@ function updatePlot(data, xAxisGroup, yAxisGroup) {
     .call(d3.axisLeft(y).tickFormat(function(d) {
         return d + " h"; // Append " h" to the tick labels
       }));
-}
+
+    bars.on("click", function(d) {
+        // Remove any existing subgraph
+        d3.select("#activitysubgraph").remove();
+        d3.select("#categorysubgraph").remove();
+
+        updateSubgraphs(data, d)
+    });
+
+    // Add the event listener to the body
+    d3.select('body').on('click', function() {
+        // Check if the event target is part of the bar plot
+        if (!d3.select(d3.event.target).classed('bar')) {
+        // If not, reset the subplots
+        d3.select("#activitysubgraph").remove();
+        d3.select("#categorysubgraph").remove();
+        updateSubgraphs(data);
+    }
+  });
+};
+
+function updateSubgraphs(data, d = null){
+    //TODO: maybe add class inheritance here:
+    updateActivitySubgraph(data, d);
+    updateCategorySubgraph(data, d);
+};
+
+function updateActivitySubgraph(data, d = null){
+    // Create a new SVG for the subgraph
+    var subgraphSvg = d3.select("body").append("svg")
+    .attr("id", "activitysubgraph")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    if (!d){
+        var subgraphData = data
+    }
+    else {
+        // Filter the data for the clicked bar
+        var subgraphData = data.filter(function(dataPoint) {
+            return dataPoint.dayOfWeek == d.key;
+        });
+    }
+
+    // Group the data by activity and calculate the sum of time for each group
+    var groupedData = d3.nest()
+    .key(function(d) { return d.activity; })
+    .rollup(function(v) { return d3.sum(v, function(d) { return d.time/3600; }); })
+    .entries(subgraphData);
+
+
+    // Sort the data by the sum of time and take the top 10 activities
+    groupedData.sort(function(a, b) { return b.value - a.value; });
+    groupedData = groupedData.slice(0, 10);
+
+    // Create the scales for the subgraph
+    var x = d3.scaleBand().range([0, width]).padding(0.1);
+    var y = d3.scaleLinear().range([height, 0]);
+
+    // Set the domains for the scales
+    x.domain(groupedData.map(function(d) { return d.key; }));
+    y.domain([0, d3.max(groupedData, function(d) { return d.value; })]);
+
+    // Create the axes for the subgraph
+    var xAxis = d3.axisBottom(x);
+    var yAxis = d3.axisLeft(y);
+
+    // Append the axes to the subgraph
+    subgraphSvg.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(xAxis);
+    subgraphSvg.append("g")
+    .attr("class", "y axis")
+    .call(yAxis);
+
+    // Append the rectangles for the subgraph bar chart
+    subgraphSvg.selectAll(".bar")
+    .data(groupedData)
+    .enter().append("rect")
+    .attr("class", "bar")
+    .attr("x", function(d) { return x(d.key); })
+    .attr("width", x.bandwidth())
+    .attr("y", function(d) { return y(d.value); })
+    .attr("height", function(d) { return height - y(d.value); });
+};
+
+function updateCategorySubgraph(data, d = null){
+    // Create a new SVG for the subgraph
+    var subgraphSvg = d3.select("body").append("svg")
+    .attr("id", "categorysubgraph")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    if (!d){
+        var subgraphData = data
+    }
+    else {
+        // Filter the data for the clicked bar
+        var subgraphData = data.filter(function(dataPoint) {
+            return dataPoint.dayOfWeek == d.key;
+        });
+    }
+
+    // Group the data by category and calculate the sum of time for each group
+    var groupedData = d3.nest()
+    .key(function(d) { return d.category; })
+    .rollup(function(v) { return d3.sum(v, function(d) { return d.time/3600; }); })
+    .entries(subgraphData);
+
+
+    // Sort the data by the sum of time and take the top 10 categories
+    groupedData.sort(function(a, b) { return b.value - a.value; });
+    groupedData = groupedData.slice(0, 10);
+
+    // Create the scales for the subgraph
+    var x = d3.scaleBand().range([0, width]).padding(0.1);
+    var y = d3.scaleLinear().range([height, 0]);
+
+    // Set the domains for the scales
+    x.domain(groupedData.map(function(d) { return d.key; }));
+    y.domain([0, d3.max(groupedData, function(d) { return d.value; })]);
+
+    // Create the axes for the subgraph
+    var xAxis = d3.axisBottom(x);
+    var yAxis = d3.axisLeft(y);
+
+    // Append the axes to the subgraph
+    subgraphSvg.append("g")
+    .attr("class", "x axis")
+    .attr("transform", "translate(0," + height + ")")
+    .call(xAxis);
+    subgraphSvg.append("g")
+    .attr("class", "y axis")
+    .call(yAxis);
+
+    // Append the rectangles for the subgraph bar chart
+    subgraphSvg.selectAll(".bar")
+    .data(groupedData)
+    .enter().append("rect")
+    .attr("class", "bar")
+    .attr("x", function(d) { return x(d.key); })
+    .attr("width", x.bandwidth())
+    .attr("y", function(d) { return y(d.value); })
+    .attr("height", function(d) { return height - y(d.value); });
+};
