@@ -10,8 +10,10 @@ from todoist_api_python.api import Task
 from todoist_api_python.api import TodoistAPI
 import requests
 import pytz
+import matplotlib.pyplot as plt
 
 from helpers import add_website_link
+from helpers import _from_rgb
 
 class Todoist():
     def __init__(self, key: str,  window: tk.Frame) -> None:
@@ -25,6 +27,7 @@ class Todoist():
         """
         self.__key = key
         self.window = window
+        self.color_theme = "plasma"
 
         self.tasks = self.get_tasks()
 
@@ -43,10 +46,12 @@ class Todoist():
             print("Collecting Additional Todoist Tasks " + str(item) + " of " + str(user_completed_stats))
         # save to CSV
         print(len(past_tasks))
+        past_tasks_copy = past_tasks.copy()
         for i, past_task in past_tasks.iterrows():
             if datetime.datetime.strptime(past_task['completed_at'], "%Y-%m-%dT%H:%M:%S.%fZ").date() < datetime.datetime.strptime(tasks_last_save[0], '%Y-%m-%d').date():
-                past_task.drop(i, inplace=True)
+                past_tasks_copy.drop(i, inplace=True)
                 # if datetime.datetime.strptime(past_task['completed_at'], "%Y-%m-%dT%H:%M:%S.%fZ")
+        past_task = past_tasks_copy
         print(len(past_tasks))
         print("...Generating CSV Export")
         return past_tasks
@@ -177,7 +182,7 @@ class Todoist():
         url = "https://todoist.com/app/project/2313332067"
         font = ('Aerial 12')
         side = "top"
-        add_website_link(self.window, url, text, font, side)
+        add_website_link(self.window, url, text, font, side, fg = "black", bg = "white")
 
     def add_tasks_list(self):
         """
@@ -212,7 +217,9 @@ class Todoist():
                                         height=10, width=40, font=('Arial', 18),
                                         justify='center')
         self.tasks_listbox.pack(side = tk.TOP)
-        colors = ["yellow", "blue", "orange", "red"]
+        colors = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 4))
+        colors = [_from_rgb(color) for color in colors]
+        colors.reverse()
         self.task_colors = []
         for i, task in enumerate(self.tasks):
             due_date = task.due.date.split("-")

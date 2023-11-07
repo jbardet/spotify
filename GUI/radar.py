@@ -11,8 +11,14 @@ import pandas as pd
 from helpers import round_point_00_2
 from matplotlib.patches import Polygon
 from wordcloud import WordCloud
-
+from typing import Dict
+import tkinter.ttk as ttk
+import json
+import math
 from DraggablePoint import DraggablePoint
+from helpers import add_website_link
+from SpotifyPlayer import SpotifyPlayer
+import threading
 
 try:
     from ..Database import Database
@@ -26,14 +32,28 @@ except ImportError:
     from Database import Database
     from Client import APIClient
 
+# plt.switch_backend('agg')
+
+
 class Radar():
     """
     Interactive Radar plot class to choose parameters to create playlists
     """
-    def __init__(self, window: tk.Frame):
+    def __init__(self, spotify_cr: Dict[str, str], db_cr: Dict[str, str],  window: tk.Frame):
         self.window = window
         self.move_flag = False
         self.area = None
+        self.__db_id = db_cr['id']
+        self.__db_password = db_cr['password']
+        self.__db_name = db_cr["db_name"]
+        self.__spotify_cr = spotify_cr
+
+        # add spotify website link on to spotify
+        text = "Spotify"
+        url = "https://open.spotify.com/?"
+        font= ('Aerial 12')
+        side = "top"
+        add_website_link(self.window, url, text, font, side, fg = 'blue', bg = 'white')
 
         # # Test of some genres analysis
         # self.analyze_artists()
@@ -64,19 +84,28 @@ class Radar():
                    speechiness, instrumentalness, loudness, tempo]
         self.angles += self.angles[:1]
         self.values += self.values[:1]
-        self.display_labels()
+        n = math.ceil(len(self.values)/3)
+        label_frames = []
+        for _ in range(n):
+            label_frame =  tk.Frame(self.window, bg='white')
+            label_frame.pack(side='top', anchor='center', fill='both', expand=True)
+            label_frames.append(label_frame)
+        self.display_labels(label_frames)
+        self.add_playlist_buttons()
         # Initialize the violin plots to show the distribution of the data
         self.violin_pos, self.violin_neg = None, None
 
-        # Show examples of playlists' distributions
-        self.playlists = ["Deep Focus", "Bike"]
+        # let's make a spotify player to play songs
+        spotify_player_frame = tk.Frame(self.window, bg='white')
+        spotify_player_frame.pack(side='bottom', anchor='center', fill='both', expand=True)
+        SpotifyPlayer(spotify_player_frame, self.__spotify_cr)
 
     def analyze_artists(self) -> None:
         """
         Test to analyze artists and their genres
         """
         # get the artists from the database
-        db = Database("", "", "")
+        db = Database(self.__db_id, self.__db_password, self.__db_name)
         artists = db.get_artists()
         columns = [column[0] for column in db.get_column_names_artists()]
         # create a dataframe with columns and values with artists
@@ -108,35 +137,53 @@ class Radar():
         Add buttons to the GUI to display some playlists and update graph accordingly
         """
         # add a button for each playlist
-        for i, playlist in enumerate(self.playlists):
-            button = Button(self.window, text = playlist, command = lambda i=i: self.show_playlist(i))
-            button.pack(side = tk.BOTTOM)
+        # Show examples of playlists' distributions
+        playlist_frame = tk.Frame(self.window, bg='white')
+        playlist_frame.pack(side='top', anchor='center', fill='both', expand=True)
+        with open("Playlists/playlists.json", "r") as file:
+            playlists = json.load(file)[0]
+        # for key, value in playlists.items():
+        #     show_playlist
+        # current_table = tk.StringVar() # create variable for table
+        # combo = tk.Combobox(playlist_frame, values = list(playlists.keys()))
+        # self.config
+        # # (playlist_frame, text = key, command = lambda value=value: self.show_playlist(value))
+        # button.pack(side = tk.LEFT)
+        table = TableDropDown(playlist_frame, list(playlists.keys()))
+        def print_value():
+            print(table.current_table.get())
+            self.show_playlist(playlists[table.current_table.get()])
 
-    def show_playlist(self, i: int):
+        b = Button(playlist_frame, text='Show playlist', command = print_value)
+        b.pack(side = "left")
+        # print(table.table.get())
+
+    def show_playlist(self, values: dict):
         """
         Update graph based on playlist stats found in the db
         """
-        playlist_name = self.playlists[i]
-        db = Database("", "", "")
-        playlist_tracks = db.get_playlist_tracks(playlist_name)
-        columns = [column[0] for column in db.get_column_names()]
+        db = Database(self.__db_id, self.__db_password, self.__db_name)
+        playlist_names = list(values.keys())
         tracks_features = {
-            'acousticness': [],
-            'energy': [],
-            'danceability': [],
-            'valence': [],
-            'liveness': [],
-            'speechiness': [],
-            'instrumentalness': [],
-            'loudness': [],
-            'tempo': []
-        }
-        for track in playlist_tracks[1:-1].split(","):
-            track_features = db.retrieve_feature(track)[0]
-            for key in tracks_features.keys():
-                tracks_features[key].append(track_features[columns.index(key)])
-            # tracks_features.append(track_features)
-        # print(tracks_features)
+                'acousticness': [],
+                'energy': [],
+                'danceability': [],
+                'valence': [],
+                'liveness': [],
+                'speechiness': [],
+                'instrumentalness': [],
+                'loudness': [],
+                'tempo': []
+            }
+        columns = [column[0] for column in db.get_column_names()]
+        for playlist_name in playlist_names:
+            playlist_tracks = db.get_playlist_tracks(playlist_name)
+            for track in playlist_tracks[1:-1].split(","):
+                track_features = db.retrieve_feature(track)[0]
+                for key in tracks_features.keys():
+                    tracks_features[key].append(track_features[columns.index(key)])
+                # tracks_features.append(track_features)
+            # print(tracks_features)
         df = pd.DataFrame.from_dict(tracks_features)
         for i, col in enumerate(self.cols):
             violin_pos, violin_neg = self.get_violin(df[col], i)
@@ -144,7 +191,7 @@ class Radar():
             violin_neg.set_alpha(0.5)
             self.violins.append([violin_pos, violin_neg])
 
-    def display_labels(self) -> None:
+    def display_labels(self, windows = tk.Frame) -> None:
         """
         Display the labels of the variables on the GUI
         """
@@ -154,12 +201,12 @@ class Radar():
             # part of the window, each one down the other
             text = StringVar()
             text.set(self.cols[i]+": "+ str(self.values[i]))
-            label = Label(self.window, text = text.get())
+            label = Label(windows[i//3], text = text.get())
             # increase size of label text
-            label.config(font=("Arial", 6))
+            label.config(font=("Arial", 12), background='white')
             # TODO: change and place closer to the graph's axes
             # label.place(x = 20, y = 60 + 60 * i)
-            label.pack(side = tk.TOP)
+            label.pack(side = tk.LEFT)
             self.labels.append(label)
 
     def change_value(self, i: int) -> None:
@@ -244,7 +291,7 @@ class Radar():
         self.ax.set_rgrids([0, 0.2, 0.4, 0.6, 0.8, 1])
 
         # Create a colormap from green to red
-        db = Database("", "", "")
+        db = Database(self.__db_id, self.__db_password, self.__db_name)
         db_data = db.get_all()
         df = pd.DataFrame(db_data)
         df_columns = db.get_column_names()
@@ -268,7 +315,6 @@ class Radar():
 
         points = self.create_draggable_points(canvas)
         self.area = self.ax.fill(self.angles, self.values, color='blue', alpha=0.6)
-        self.add_playlist_buttons()
 
         # add a button to create a playlist
         self.button = Button(self.window, text = "Create Playlist",
@@ -333,8 +379,8 @@ class Radar():
         """
         Creates a playlists based on the songs found in the database
         """
-        client = APIClient([''], [''],
-            [''])
+        client = APIClient([self.__spotify_cr['username']], [self.__spotify_cr['client_id']],
+            [self.__spotify_cr['client_secret']])
         self.songs = self.search_for_songs()
         if len(self.songs)>0:
             client.create_playlist(self.songs, "Test Playlist")
@@ -353,7 +399,7 @@ class Radar():
         Research algorithm needs to be improved, maybe add genre diversity also.
         For now maybe only take random songs for the parameters
         """
-        db = Database("", "", "")
+        db = Database(self.__db_id, self.__db_password, self.__db_name)
         values, boundaries = self.rebalance()
         songs = db.get_songs(self.cols, values, boundaries)
         if len(songs)<20:
@@ -411,3 +457,12 @@ class Radar():
             else:
                 values.append(self.values[i]*(self.limits[i][1]-self.limits[i][0]))
         return values, boundaries
+
+class TableDropDown(ttk.Combobox):
+    def __init__(self, parent, values):
+        self.current_table = tk.StringVar() # create variable for table
+        ttk.Combobox.__init__(self, parent)#  init widget
+        self.config(textvariable = self.current_table, state = "readonly", values = values)
+        self.current(0) # index of values for current table
+        self.pack(side="left") # place drop down box
+        # print(self.current_table.get())

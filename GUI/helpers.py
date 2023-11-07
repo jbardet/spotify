@@ -21,7 +21,16 @@ def open_url(url: str) -> None:
     """
     webbrowser.open_new_tab(url)
 
-def add_website_link(window: tk.Frame, url: str, text: str, font: str, side: str) -> None:
+def _from_rgb(rgb):
+    """translates an rgb tuple of int to a tkinter friendly color code
+    """
+    try:
+        rgb = (round(rgb[0]*255), round(rgb[1]*255), round(rgb[2]*255))
+        return "#%02x%02x%02x" % rgb
+    except TypeError:
+        return rgb
+
+def add_website_link(window: tk.Frame, url: str, text: str, font: str, side: str, fg: str, bg: str) -> None:
     """
     Add a link to a website
 
@@ -35,7 +44,7 @@ def add_website_link(window: tk.Frame, url: str, text: str, font: str, side: str
     :type font: str
     """
     label = tk.Label(window, text= text, cursor= "hand2",
-                     foreground= "blue", font= font)
-    label.pack(side = side)
+                     foreground= _from_rgb(fg), font= font, bg=_from_rgb(bg))
+    label.pack(side = side, expand = True)
     label.bind("<Button-1>", lambda e: open_url(url))
 

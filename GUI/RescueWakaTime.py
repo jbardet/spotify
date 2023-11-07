@@ -9,7 +9,7 @@ import os
 import json
 import datetime
 import pickle
-from colour import Color
+# from colour import Color
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
 import requests
@@ -51,16 +51,25 @@ class RescueWakaTime():
         self.category_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=rank&restrict_kind=document&interval=hour&restrict_begin={self.today}&restrict_end={self.today}&format=json"
         self.activity_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=rank&restrict_kind=activity&interval=hour&restrict_begin={self.today}&restrict_end={self.today}&format=json"
 
-        self.color_palette = self.create_color_palette()
-
-        # self.test_wakatime()
-        # self.weekly_save()
+        # self.color_palette = self.create_color_palette()
+        self.color_theme = "plasma"
+        self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 5))
+        self.color_palette = np.flip(self.color_palette, 0)
 
     def save_data(self):
         """
         Save the weekly data from the API in a json file
         """
         # get the last save from the last csv file
+        # activities_saved = pd.read_csv('data/first_save/rescuetime_activities.csv')
+        # activities_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+        # activities_saved.drop_duplicates(subset = ["date","time","activity","category","document","productivity","device"], inplace = True)
+        # activities_saved.to_csv('data/first_save/rescuetime_activities.csv')
+        # activities_saved = pd.read_csv('data/first_save/rescuetime_overview.csv')
+        # activities_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+        # activities_saved.drop_duplicates(subset = ["date","time","category","device"], inplace = True)
+        # activities_saved.to_csv('data/first_save/rescuetime_overview.csv')
+        # print("oe")
         try:
             activities_saved = pd.read_csv('data/rescuetime_activities.csv')
             activities_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
@@ -84,7 +93,6 @@ class RescueWakaTime():
         activities_date_save = datetime.datetime.strptime(activities_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
         overview_date_save = datetime.datetime.strptime(overview_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
         summary_date_save = datetime.datetime.strptime(summary_last_save.split(" ")[0], '%Y-%m-%d').date().strftime('%Y-%m-%d')
-        # last_save = '2023-10-10'
         restrict_source_types = ['computers', 'mobile', 'offline']
         today = datetime.date.today()
         # today = datetime.datetime.strptime('2023-10-20', '%Y-%m-%d').date()
@@ -140,7 +148,8 @@ class RescueWakaTime():
                     r = requests.get(url, payload) # Make Request
                     iter_result = r.json() # Parse result
                     # print("Collecting Activities for " + str(d3))
-                except:
+                except Exception as e:
+                    print(e)
                     print("Error collecting data for " + str(d3))
 
                 if len(iter_result) != 0:
@@ -169,7 +178,8 @@ class RescueWakaTime():
                     overview_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=interval&restrict_kind=overview&restrict_begin={str(d3)}&restrict_end={str(d3)}&resolution=minute&format=json&restrict_source_type={restrict_source_type}"
                     overview = requests.get(overview_call).json()
                     # print("Collecting Activities for " + str(d3))
-                except:
+                except Exception as e:
+                    print(e)
                     print("Error collecting data for " + str(d3))
 
                 if len(overview) != 0:
@@ -190,13 +200,14 @@ class RescueWakaTime():
         overview_added.sort_values(by='date', inplace=True)
         activities_added.sort_values(by='date', inplace=True)
         # append the loaded dataframe with the one we just created
+        overview_added_copy = overview_added.copy()
         for i, row in overview_added.iterrows():
             # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
             # otherwise not
             # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
             if row['date']<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
                 # remove the row
-                overview_added.drop(i, inplace=True)
+                overview_added_copy.drop(i, inplace=True)
             # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
             elif row['date']==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
                 len_overview = len(overview_saved)
@@ -205,13 +216,15 @@ class RescueWakaTime():
                     (overview_saved['category'] == row['category']) &
                     (overview_saved['device'] == row['device'])].index, inplace=True)
                 # assert len_overview-len(overview_saved) == 1
+        overview_added = overview_added_copy
+        activities_added_copy = activities_added.copy()
         for i, row in activities_added.iterrows():
             # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
             # otherwise not
             # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S") < datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
             if row['date'] < datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
                 # remove the row
-                activities_added.drop(i, inplace=True)
+                activities_added_copy.drop(i, inplace=True)
             # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
             elif row['date']==datetime.datetime.strptime(activities_last_save, "%Y-%m-%d %H:%M:%S"):
                 len_activities = len(activities_saved)
@@ -223,6 +236,7 @@ class RescueWakaTime():
                     (activities_saved['productivity'] == row['productivity']) &
                     (activities_saved['device'] == row['device'])].index, inplace=True)
                 assert len_activities-len(activities_saved) == 1
+        activities_added = activities_added_copy
         try:
             overview = pd.concat([overview_saved, overview_added], ignore_index=True)
         except UnboundLocalError:
@@ -305,12 +319,13 @@ class RescueWakaTime():
         summary_added = pd.DataFrame.from_dict(summary_dict)
         summary_added = summary_added.reindex(index=summary_added.index[::-1]).reset_index()
         summary_added.drop(columns = ['index'], inplace=True)
+        summary_added_copy = summary_added.copy()
         try:
             for i, row in summary_added.iterrows():
                 len_summary = len(summary_saved)
-                summary_saved.drop(summary_saved[summary_saved['date'] == row['date']].index, inplace=True)
-                assert len_summary-len(summary_saved)==1
-            summary = pd.concat([summary_saved, summary_added], ignore_index=True)
+                summary_added_copy.drop(summary_saved[summary_saved['date'] == row['date']].index, inplace=True)
+                # assert len_summary-len(summary_saved)==1
+            summary = pd.concat([summary_saved, summary_added_copy], ignore_index=True)
         except UnboundLocalError:
             summary = summary_added
         summary.to_csv('data/rescuetime_summary.csv')
@@ -394,7 +409,8 @@ class RescueWakaTime():
             try:
                 heartbeats = requests.get(heartbeat_call, params=extra_params).json() # Make Request
                 # print("Collecting Activities for " + str(d3))
-            except:
+            except Exception as e:
+                print(e)
                 print("Error collecting data for " + str(d3))
 
             if len(heartbeats) != 0:
@@ -429,7 +445,8 @@ class RescueWakaTime():
             try:
                 durations = requests.get(duration_call, params=extra_params).json() # Make Request
                 # print("Collecting Activities for " + str(d3))
-            except:
+            except Exception as e:
+                print(e)
                 print("Error collecting data for " + str(d3))
             if len(durations) != 0:
                 for i in durations['data']:
@@ -441,6 +458,7 @@ class RescueWakaTime():
 
         durations_added = pd.DataFrame.from_dict(durations_dict)
         heartbeats_added = pd.DataFrame.from_dict(heartbeats_dict)
+        durations_added_copy = durations_added.copy()
         if not durations_first_save:
             for i, row in durations_added.iterrows():
                 # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
@@ -448,7 +466,7 @@ class RescueWakaTime():
                 # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
                 if row['time']<datetime.datetime.strptime(durations_last_save, "%Y-%m-%d %H:%M:%S.%f"):
                     # remove the row
-                    durations_added.drop(i, inplace=True)
+                    durations_added_copy.drop(i, inplace=True)
                 # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
                 elif row['time']==datetime.datetime.strptime(durations_last_save, "%Y-%m-%d %H:%M:%S.%f"):
                     len_overview = len(durations_saved)
@@ -459,6 +477,8 @@ class RescueWakaTime():
                 durations = pd.concat([durations_saved, durations_added], ignore_index=True)
         else:
             durations = durations_added
+        durations_added = durations_added_copy
+        heartbeats_added_copy = heartbeats_added.copy()
         if not heartbeats_first_save:
             for i, row in heartbeats_added.iterrows():
                 # when load dtaaframe from csv need to put: datetime.datetime.strptime(exact_last_save, "%Y-%m-%d %H:%M:%S")
@@ -466,7 +486,7 @@ class RescueWakaTime():
                 # if datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")<datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
                 if row['time']<datetime.datetime.strptime(heartbeats_last_save, "%Y-%m-%d %H:%M:%S.%f"):
                     # remove the row
-                    heartbeats_added.drop(i, inplace=True)
+                    heartbeats_added_copy.drop(i, inplace=True)
                 # elif datetime.datetime.strptime(row['date'], "%Y-%m-%d %H:%M:%S")==datetime.datetime.strptime(overview_last_save, "%Y-%m-%d %H:%M:%S"):
                 elif row['time']==datetime.datetime.strptime(heartbeats_last_save, "%Y-%m-%d %H:%M:%S.%f"):
                     len_heartbeats = len(heartbeats_saved)
@@ -479,6 +499,7 @@ class RescueWakaTime():
                 heartbeats = pd.concat([heartbeats_saved, heartbeats_added], ignore_index=True)
         else:
             heartbeats = heartbeats_added
+        heartbeats_added = heartbeats_added_copy
         durations.to_csv('data/wakatime_durations.csv')
         heartbeats.to_csv('data/wakatime_heartbeats.csv')
         print("oe")
@@ -494,17 +515,17 @@ class RescueWakaTime():
         requests.get(self.end_call)
         return False
 
-    def create_color_palette(self) -> List[Color]:
-        """
-        Create a color palette from green (productive) to red (distracting)
+    # def create_color_palette(self) -> List[Color]:
+    #     """
+    #     Create a color palette from green (productive) to red (distracting)
 
-        :return: a list of colors
-        :rtype: List[Color]
-        """
-        red = Color("green")
-        colors = list(red.range_to(Color("red"),5))
-        colors = [col.hex for col in colors]
-        return colors
+    #     :return: a list of colors
+    #     :rtype: List[Color]
+    #     """
+    #     red = Color("green")
+    #     colors = list(red.range_to(Color("red"),5))
+    #     colors = [col.hex for col in colors]
+    #     return colors
 
     def add_analytics(self) -> None:
         """
@@ -518,26 +539,62 @@ class RescueWakaTime():
         - a button to turn on/off RescueTime when going on a break
         """
 
+        link_frame = tk.Frame(self.window, bg='white')
+        link_frame.pack(side='top', anchor='n', fill='both', expand=True)
+
         text = "RescueTime"
         url = "https://www.rescuetime.com/rtx/reports/activities"
-        self.add_website_link(text, url)
+        side = "left"
+        self.add_website_link(link_frame, text, url, side)
+
+        text = "Wakatime"
+        url = "https://wakatime.com/dashboard"
+        side = "right"
+        self.add_website_link(link_frame, text, url, side)
 
         # TODO: Also add a button either to oy.system to open RescueTime app
         # to add offline work or make a widget to add offline work
 
         self.add_analytics_plots()
-        self.add_start_rescue_time_button()
-
-        text = "Wakatime"
-        url = "https://wakatime.com/dashboard"
-        self.add_website_link(text, url)
+        # self.add_start_rescue_time_button()
 
         # self.add_wakatime_plot()
 
-    # def add_wakatime_plot(self):
-    #     self.test_wakatime()
+    def add_wakatime_plot(self, df: pd.DataFrame) -> None:
+        status_call = "https://wakatime.com/api/v1/users/current/status_bar/today?api_key="+self.__waka_key
+        status_bar = requests.get(status_call).json()
+        with open("status_bar.pickle", "wb") as file:
+            pickle.dump(status_bar, file)
+        with open('status_bar.pickle', 'rb') as handle:
+            status_bar = pickle.load(handle)
+        # status bar: ['grand_total', 'range', 'projects', 'languages', 'dependencies', 'machines', 'editors', 'operating_systems', 'categories']
+        rt_tot_time = df['time'].sum()/3600
+        try:
+            rt_prod_time = df.groupby('productivity').sum()['time'][2]/3600
+        except IndexError:
+            rt_prod_time = 0
+        try:
+            rt_vs_time = df.groupby('activity').sum()['time']['Visual Studio Code']/3600
+        except KeyError:
+            rt_vs_time = 0
+        total_today = status_bar['data']['grand_total']['decimal']
+        categories = status_bar['data']['categories']
+        # Make the plot and add it to the GUI window
+        fig, (self.ax) = plt.subplots(1, 1, figsize=(5,4))
+        plt.title("Time analysis")
+        plt.ylabel("Time (hours)")
+        labels = ["RT_tot", "RT_prod", "RT_VS", "WT_tot"] + [cat['name'] for cat in categories]
+        values = [rt_tot_time, rt_prod_time, rt_vs_time, float(total_today)] + [float(cat['decimal']) for cat in categories]
+        color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 6))
+        plt.bar(labels, values, color=color_palette)
+        # Add angle to the labels to see all labels entirely
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        canvas = FigureCanvasTkAgg(fig, master = self.window)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.pack(side = tk.TOP)
 
-    def add_website_link(self, text: str, url: str) -> None:
+    def add_website_link(self, window: tk.Frame, text: str, url: str, side: str) -> None:
         """
         Add a label to access the RescueTime website for analytics
 
@@ -547,8 +604,7 @@ class RescueWakaTime():
         :type url: str
         """
         font= ('Aerial 12')
-        side = "top"
-        add_website_link(self.window, url, text, font, side)
+        add_website_link(window, url, text, font, side, fg = self.color_palette[-1], bg= self.color_palette[0])
 
     def add_analytics_plots(self) -> None:
         """
@@ -568,34 +624,6 @@ class RescueWakaTime():
         self.add_categorical_plot(df)
         # self.add_activity_plot(df)
         self.add_wakatime_plot(df)
-
-    def add_wakatime_plot(self, df: pd.DataFrame) -> None:
-        status_call = "https://wakatime.com/api/v1/users/current/status_bar/today?api_key="+self.__waka_key
-        status_bar = requests.get(status_call).json()
-        with open("status_bar.pickle", "wb") as file:
-            pickle.dump(status_bar, file)
-        with open('status_bar.pickle', 'rb') as handle:
-            status_bar = pickle.load(handle)
-        # status bar: ['grand_total', 'range', 'projects', 'languages', 'dependencies', 'machines', 'editors', 'operating_systems', 'categories']
-        rt_tot_time = df['time'].sum()/3600
-        rt_prod_time = df.groupby('productivity').sum()['time'][2]/3600
-        rt_vs_time = df.groupby('activity').sum()['time']['Visual Studio Code']/3600
-        total_today = status_bar['data']['grand_total']['decimal']
-        categories = status_bar['data']['categories']
-        # Make the plot and add it to the GUI window
-        fig, (self.ax) = plt.subplots(1, 1, figsize=(5,4))
-        plt.title("Time analysis")
-        plt.ylabel("Time (hours)")
-        labels = ["RT_tot", "RT_prod", "RT_VS", "WT_tot"] + [cat['name'] for cat in categories]
-        values = [rt_tot_time, rt_prod_time, rt_vs_time, float(total_today)] + [float(cat['decimal']) for cat in categories]
-        plt.bar(labels, values, color='blue')
-        # Add angle to the labels to see all labels entirely
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        canvas = FigureCanvasTkAgg(fig, master = self.window)
-        canvas_widget = canvas.get_tk_widget()
-        canvas_widget.pack(side = tk.TOP)
-
 
     def add_activity_plot(self, df: pd.DataFrame) -> None:
         # response = requests.get(self.activity_call)
@@ -638,17 +666,20 @@ class RescueWakaTime():
 
         # Make a horizontal bar chart with the productivity score [-2,2] and
         # the time spent in hours
-        data_to_plot = [[] for _ in range(len(rank))]
+        data_to_plot = [[] for _ in range(5)]
         for key, value in rank.items():
             data_to_plot[2-key] = [key, value]
+        for i, sublist in enumerate(data_to_plot):
+            if len(sublist)<2:
+                data_to_plot[i] = [2-i, 0]
 
         # Make the plot and add it to the GUI window
         fig, (self.ax) = plt.subplots(1, 1, figsize=(5,2))
         plt.title("Productivity Rank (2 most productive, -2 most distracting))")
         plt.xlabel("Time (hours)")
         plt.barh(np.array(data_to_plot)[:,0],
-                 np.array(data_to_plot)[:,1]/3600,
-                 color=self.color_palette)
+                np.array(data_to_plot)[:,1]/3600,
+                color=self.color_palette)
         plt.tight_layout()
         canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = canvas.get_tk_widget()

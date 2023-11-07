@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Tuple
 import datetime
 import pickle
 import requests
+import threading
 import json
 from colour import Color
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -35,6 +36,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from todoist_api_python.api import TodoistAPI
+from tkinter import ttk
+from ttkthemes import ThemedTk
 
 from RescueWakaTime import RescueWakaTime
 from Todoist import Todoist
@@ -42,6 +45,7 @@ from Timer import Timer
 from Calendar import Calendar
 from Radar import Radar
 from Fitbit import Fitbit
+from LastFM import LastFM
 
 class App(tk.Tk):
     """
@@ -52,10 +56,22 @@ class App(tk.Tk):
         self.launch()
 
     def launch(self):
-        self.window = tk.Tk()
+        self.window = ThemedTk(theme="equilux")
+        # self.window = tk.Tk()
         self.window.title('Plotting in Tkinter')
         self.window.state('zoomed')   #zooms the screen to maxm whenever executed
+        self.window.protocol("WM_DELETE_WINDOW", self.exit)
+        # self.window.configure(background='')
+        color_theme = "plasma"
 
+        today = datetime.datetime.today()
+        objective = 0
+        # if the day is a week-end, congratulate the user to put work on week-ends with a pop-up window
+        if today.weekday() == 5 or today.weekday() == 6:
+            messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
+            objective = 2
+        else:
+            objective = 7.5
         # make 3 frames from the main window
         self.left_frame = tk.Frame(self.window, bg='white')
         self.left_frame.pack(side='left', fill='both', expand=True)
@@ -78,35 +94,45 @@ class App(tk.Tk):
             calendar_cr = data['calendar']
             db_cr = data['database']
             spotify_cr = data['spotify']
+            lastfm_cr = data['lastfm']
 
         # self.radio_links = ["https://coderadio.freecodecamp.org/",
         #                     "https://musicforprogramming.net/latest/",
         #                     "https://radio.x-team.com/",
         #                     "https://www.lofi.cafe/"]
-
-        # # # plot_button = Button(master = window,command = Radar(window).plot_radar())
-        # # #, height = 2, width = 10, text = "Plot")
-        # # # plot_button.pack()
-        # self.rw_time = RescueWakaTime(rescue_cr, waka_cr, self.left_frame)
-        # self.rw_time.add_analytics()
-        # self.todoist = Todoist(todoist_cr, self.upright_frame)
-        # self.todoist.add_tasks()
-        # self.timer = Timer(self.downright_frame)
-        # # # # self.google_calendar(calendar_cr)
-        # # # # add link to notion: https://www.notion.so/
-        # # # # maybe onenote as well ?
-        # # # # import time
-        # # # # time.sleep(100)
+        # text = "RescueTime"
+        # url = "https://www.rescuetime.com/rtx/reports/activities"
+        # font= ('Aerial 12')
+        # side = "top"
+        # add_website_link(self.window, url, text, font, side)
+        self.rw_time = RescueWakaTime(rescue_cr, waka_cr, self.left_frame)
+        self.rw_time.add_analytics()
+        self.todoist = Todoist(todoist_cr, self.upright_frame)
+        self.todoist.add_tasks()
+        self.timer = Timer(self.downright_frame, objective)
+        self.window.bind('<Return>', self.timer.enter)
+        self.window.bind('<Escape>', self.timer.stop)
+        # # # self.google_calendar(calendar_cr)
+        # # # add link to notion: https://www.notion.so/
+        # # # maybe onenote as well ?
+        # # # import time
+        # # # time.sleep(100)
+        # # self.lastfm = LastFM(lastfm_cr)
+        # # self.lastfm.save_data()
         # self.radar = Radar(spotify_cr, db_cr, self.middle_frame)
-        # self.radar.plot_radar()
-        # self.fitbit = Fitbit(fitbit_cr)
-        # fitbit.get_data()
+        # thd = threading.Thread(target=self.radar.plot_radar)   # timer thread
+        # thd.daemon = True
+        # thd.start()
+        self.radar = Radar(spotify_cr, db_cr, self.middle_frame)
+        self.radar.plot_radar()
+        # # self.fitbit = Fitbit(fitbit_cr)
+        # # fitbit.get_data()
 
-        # create a button in the menu that creates a weekly review and saves data into databases
-        # and also on disk
-        # weekly_button = Button(master = self.window, height = 2, width = 10, text = "Weekly Review", command = self.weekly_review)
-        # weekly_button.pack(side=tk.TOP)
-        self.weekly_review()
+        # # create a button in the menu that creates a weekly review and saves data into databases
+        # # and also on disk
+        # # weekly_button = Button(master = self.window, height = 2, width = 10, text = "Weekly Review", command = self.weekly_review)
+        # # weekly_button.pack(side=ttk.TOP)
+        # # self.weekly_review()
 
         self.window.mainloop()
 
@@ -120,20 +146,25 @@ class App(tk.Tk):
             calendar_cr = data['calendar']
             db_cr = data['database']
             spotify_cr = data['spotify']
+            lastfm_cr = data['lastfm']
         with open('saves.txt', 'r') as file:
             last_save = file.read()
         # self.rw_time = RescueWakaTime(rescue_cr, waka_cr, self.left_frame)
         # self.rw_time.save_data()
-        # self.todoist = Todoist(todoist_cr, self.upright_frame)
-        # self.todoist.save_data(last_save)
+        self.todoist = Todoist(todoist_cr, self.upright_frame)
+        self.todoist.save_data(last_save)
         # self.radar = Radar(spotify_cr, db_cr, self.middle_frame)
         # self.radar.save_data()
-        self.fitbit = Fitbit(fitbit_cr)
-        self.fitbit.save_data()
+        # self.fitbit = Fitbit(fitbit_cr)
+        # self.fitbit.save_data()
+        # self.lastfm = LastFM(lastfm_cr)
+        # self.lastfm.save_data()
         self.generate_weekly_report()
 
     def generate_weekly_report(self):
         pass
 
     def exit(self):
+        self.timer.stop()
+        self.timer.save_data()
         self.window.destroy()

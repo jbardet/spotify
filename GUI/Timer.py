@@ -10,8 +10,10 @@ import json
 from io import StringIO
 from Calendar import Calendar
 from datetime import datetime
+from datetime import date
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import threading
 
 import pygsheets
 import pandas as pd
@@ -29,8 +31,7 @@ class Timer():
         :type window: tk.Frame
         """
         self.window = window
-        self.add_timer()
-        self.sec = np.inf
+        self.min = np.inf
         self.run = False
         self.objective = objective
 
@@ -42,10 +43,16 @@ class Timer():
             'category': [],
             'description': [],
             'start': [],
-            'end': []
+            'end': [],
+            'date': []
         }
+
+        self.load_data()
+        self.plot_frame = tk.Frame(self.window, bg='white')
+        self.plot_frame.pack(side='top', fill='both', expand=True)
         total_time = self.compute_time()
         self.add_radial_plot(total_time)
+        self.add_timer()
 
     def compute_time(self):
         # gather the sum of the time for all offline_dict entries
@@ -53,17 +60,29 @@ class Timer():
         timer_time = 0
         for i, event in enumerate(self.timer_dict['event']):
             if i == 0: continue
-            if self.timer_dict['event'][i-1] == "start" and (event == 'pause' or event == 'stop'):
+            if self.timer_dict['event'][i-1] == "start" and (event == 'pause' or event == 'stop' or event == "finish"):
                 timer_time += (self.timer_dict['time'][i] - self.timer_dict['time'][i-1]).total_seconds()
         return offline_time + timer_time
 
     def play(self):
-        self.timer_dict['event'].append("start")
-        self.timer_dict['time'].append(datetime.now())
         self.run = True
-        self.submit()
+        print(hasattr(self, 'submit_thread'))
+        if not hasattr(self, 'submit_thread'):
+            print("start new one")
+            self.event = threading.Event()
+            self.submit_thread = threading.Thread(target=self.submit, args=(self.event,))
+            self.submit_thread.daemon = True
+            self.timer_dict['event'].append("start")
+            self.timer_dict['time'].append(datetime.now())
+            self.submit_thread.start()
 
-    def submit(self):
+    def enter(self, event: tk.Event):
+        if self.run:
+            self.pause()
+        else:
+            self.play()
+
+    def submit(self, event):
         """
         Start the timer
         """
@@ -74,8 +93,11 @@ class Timer():
         except:
             print("Please input the right value")
         while self.sec >-1:
-            if not self.run:
+            if event.is_set():
                 return
+            elif not self.run:
+                time.sleep(1)
+                continue
             mins, secs = divmod(self.sec,60)
 
             # Converting the input entered in mins or secs to hours,
@@ -111,6 +133,10 @@ class Timer():
                 label.pack(side=tk.TOP)
                 self.add_links(toplevel)
                 self.reset()
+                del self.event
+                del self.submit_thread
+                total_time = self.compute_time()
+                self.add_radial_plot(total_time)
 
             # after every one sec the value of temp will be decremented
             # by one
@@ -122,15 +148,28 @@ class Timer():
         """
         self.timer_dict['event'].append("pause")
         self.timer_dict['time'].append(datetime.now())
+        # pause the thread
         self.run = False
 
-    def stop(self):
+    def stop(self, event=None):
         """
         Stop the timer
         """
+        self.run = False
         self.timer_dict['event'].append("stop")
         self.timer_dict['time'].append(datetime.now())
+        # stop the thread
+        try:
+            self.event.set()
+        except AttributeError:
+            pass
         self.reset()
+        # when we close the main window maybe the thread is not running
+        try:
+            del self.event
+            del self.submit_thread
+        except AttributeError:
+            pass
         total_time = self.compute_time()
         self.add_radial_plot(total_time)
 
@@ -143,6 +182,10 @@ class Timer():
         """
         Add a timer in the upper right part of the GUI
         """
+
+        timer_frame = tk.Frame(self.window, bg='white')
+        timer_frame.pack(side=tk.BOTTOM, fill='both', expand=True)
+
         # Declaration of variables
         self.hour=StringVar()
         self.minute=StringVar()
@@ -151,60 +194,65 @@ class Timer():
         # Setting the default value as 50 minutes (preferred time for a pomodoro)
         self.reset()
 
-        # # Set a label to explain the timer
-        # timer_label = Label(self.window, text="POMODORO: ", font=("Arial",18,""))
-        # timer_label.pack(side = tk.TOP)
+        # # # Set a label to explain the timer
+        # # timer_label = Label(self.window, text="POMODORO: ", font=("Arial",18,""))
+        # # timer_label.pack(side = tk.TOP)
 
         # Use of Entry class to take input from the user
-        hourEntry= Entry(self.window, width=3, font=("Arial",18,""),
+        hourEntry= Entry(timer_frame, width=3, font=("Arial",18,""),
                          textvariable=self.hour)
         # place it in upper right corner
         hourEntry.pack(side = tk.LEFT)
 
-        minuteEntry= Entry(self.window, width=3, font=("Arial",18,""),
+        minuteEntry= Entry(timer_frame, width=3, font=("Arial",18,""),
                            textvariable=self.minute)
         minuteEntry.pack(side = tk.LEFT)
 
-        secondEntry= Entry(self.window, width=3, font=("Arial",18,""),
+        secondEntry= Entry(timer_frame, width=3, font=("Arial",18,""),
                            textvariable=self.second)
         secondEntry.pack(side = tk.LEFT)
 
         # Button widget to start the countdown
-        btn = Button(self.window, text='Start', font=("Arial",18),
-                    command= self.play)
+        btn = Button(timer_frame, text='Start', font=("Arial",18),
+                    command=self.play)
         btn.pack(side = tk.LEFT)
-        btn = Button(self.window, text='Pause', font=("Arial",18),
+        btn = Button(timer_frame, text='Pause', font=("Arial",18),
                     command= self.pause)
         btn.pack(side = tk.LEFT)
-        btn = Button(self.window, text='Stop', font=("Arial",18),
+        btn = Button(timer_frame, text='Stop', font=("Arial",18),
                     command= self.stop)
         btn.pack(side = tk.LEFT)
 
-        enter_offline = tk.Button(self.window, text="Enter", font=("Arial",18),
-                                  command= self.enter_offline_work)
-        enter_offline.pack(side = tk.BOTTOM)
+        offline_frame = tk.Frame(self.window, bg='white')
+        offline_frame.pack(side=tk.TOP, fill='both', expand=True)
 
-        self.end = Entry(self.window, width = 20)
-        self.end.bind("<Button-1>", lambda e: self.end.delete(0, tk.END))
-        self.end.insert(0,'end')
-        self.end.pack(side = tk.BOTTOM)
-        self.start = Entry(self.window, width = 20)
-        self.start.bind("<Button-1>", lambda e: self.start.delete(0, tk.END))
-        self.start.insert(0,'start')
-        self.start.pack(side = tk.BOTTOM)
+        offline_label = tk.Label(offline_frame, text="Enter offline work: ", font=("Arial",18), bg='white')
+        offline_label.pack(side = tk.TOP)
 
-        self.description = Entry(self.window, width = 50)
-        self.description.bind("<Button-1>", lambda e: self.description.delete(0, tk.END))
-        self.description.insert(0,'Description')
-        self.description.pack(side = tk.BOTTOM)
-
-        self.category = Entry(self.window, width = 20)
+        self.category = Entry(offline_frame)
         self.category.bind("<Button-1>", lambda e: self.category.delete(0, tk.END))
         self.category.insert(0,'Category')
-        self.category.pack(side = tk.BOTTOM)
+        self.category.pack(side = tk.TOP)
 
-        offline_label = tk.Label(self.window, text="Enter offline work: ", font=("Arial",18))
-        offline_label.pack(side = tk.BOTTOM)
+        self.description = Entry(offline_frame)
+        self.description.bind("<Button-1>", lambda e: self.description.delete(0, tk.END))
+        self.description.insert(0,'Description')
+        self.description.pack(side = tk.TOP)
+
+        self.start = Entry(offline_frame)
+        self.start.bind("<Button-1>", lambda e: self.start.delete(0, tk.END))
+        self.start.insert(0,'start')
+        self.start.pack(side = tk.TOP)
+
+        self.end = Entry(offline_frame)
+        self.end.bind("<Button-1>", lambda e: self.end.delete(0, tk.END))
+        self.end.insert(0,'end')
+        self.end.pack(side = tk.TOP)
+
+        enter_offline = tk.Button(offline_frame, text="Enter", font=("Arial",18),
+                                  command= self.enter_offline_work)
+        enter_offline.pack(side = tk.TOP)
+
 
     def add_links(self, window: tk.Frame) -> None:
         """
@@ -219,43 +267,70 @@ class Timer():
         font = ('Aerial 12')
         side = "bottom"
 
-        add_website_link(window, urls[0], texts[0], font, side)
-        add_website_link(window, urls[1], texts[1], font, side)
+        add_website_link(window, urls[0], texts[0], font, side, fg = 'blue', bg='white')
+        add_website_link(window, urls[1], texts[1], font, side, fg = 'blue', bg='white')
 
     def enter_offline_work(self):
         self.offline_dict['category'].append(self.category.get())
         self.offline_dict['description'].append(self.description.get())
         self.offline_dict['start'].append(self.start.get())
         self.offline_dict['end'].append(self.end.get())
+        self.offline_dict['date'].append(date.today())
         total_time = self.compute_time()
         self.add_radial_plot(total_time)
 
-    def save_data(self):
+    def load_data(self):
+        df_drive, _ = self.get_data('timer_data.csv')
+        try:
+            df_drive['time'] = pd.to_datetime(df_drive['time'])
+            # find columns where the date is today
+            today_work = df_drive[df_drive['time'].dt.date == date.today()]
+            for _, row in today_work.iterrows():
+                self.timer_dict["event"].append(row['event'])
+                self.timer_dict["time"].append(row['time'])
+            self.timer_suppress = len(self.timer_dict["event"])
+        except KeyError:
+            pass
+
+        df_drive, _ = self.get_data('offline_work.csv')
+        # find columns where the date is today
+        try:
+            df_drive['date'] = pd.to_datetime(df_drive['date'])
+            today_work = df_drive[df_drive['date'].dt.date == date.today()]
+            for _, row in today_work.iterrows():
+                self.offline_dict["category"].append(row['category'])
+                self.offline_dict["description"].append(row['description'])
+                self.offline_dict["start"].append(row['start'])
+                self.offline_dict["end"].append(row['end'])
+                self.offline_dict["date"].append(row['date'])
+        except KeyError:
+            pass
+        self.offline_suppress = len(self.offline_dict["category"])
+
+    def get_data(self, name):
         # authorization
         gc = pygsheets.authorize(service_file='creditentials/spotify-402405-59d8f4e06e41.json')
         #open the google spreadsheet (where 'PY to Gsheet Test' is the name of my sheet)
         # DO NOT FORGET TO SHARE THE SPREADSHEET
-        sh = gc.open('timer_data.csv')
+        sh = gc.open(name)
 
         #select the first sheet
         wks = sh[0]
 
         # existing df
         df_drive = wks.get_as_df()
+        return df_drive, wks
 
+    def save_data(self):
+        df_drive, wks = self.get_data('timer_data.csv')
+        df_drive.drop(df_drive.tail(self.timer_suppress).index, inplace = True)
         #update the first sheet with df, starting at cell B2.
         df = pd.DataFrame.from_dict(self.timer_dict)
         df_save = pd.concat([df_drive, df], ignore_index=True)
         wks.set_dataframe(df_save,(0,0))
 
-
-        sh = gc.open('offline_work.csv')
-        #select the first sheet
-        wks = sh[0]
-
-        # existing df
-        df_drive = wks.get_as_df()
-
+        df_drive, wks = self.get_data('offline_work.csv')
+        df_drive.drop(df_drive.tail(self.offline_suppress).index, inplace = True)
         #update the first sheet with df, starting at cell B2.
         df = pd.DataFrame.from_dict(self.offline_dict)
         df_save = pd.concat([df_drive, df], ignore_index=True)
@@ -283,8 +358,8 @@ class Timer():
         # ax.set_title("Time spent working today", va='bottom')
         # ax.bar(x=0, height=time/(self.objective*3600), width=2*np.pi, color='green')
         # base styling logic
-        color_theme = 'Purple'
-        color = plt.get_cmap(color_theme + 's')
+        color_theme = 'plasma'
+        color = plt.get_cmap(color_theme)
         ring_width = 0.3
         outer_radius = 1.5
         inner_radius = outer_radius - ring_width
@@ -326,7 +401,7 @@ class Timer():
         plt.margins(0,0)
         plt.autoscale('enable')
         # plt.show()
-        self.canvas = FigureCanvasTkAgg(fig, master=self.window)
+        self.canvas = FigureCanvasTkAgg(fig, master=self.plot_frame)
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
         self.canvas.draw()
         self.window.update()
@@ -386,8 +461,8 @@ def add_center_label(value, objective):
 #INPUT: a df of row length 1 with the first column as the current metric value and the second column is the target metric value
 #OUTPUT: the proper text label at the apropiate position
 def add_current_label(value, objective):
-    print('vertical: ' + vertical_aligner(value, objective))
-    print('horizontal: ' + horizontal_aligner(value, objective))
+    # print('vertical: ' + vertical_aligner(value, objective))
+    # print('horizontal: ' + horizontal_aligner(value, objective))
     return plt.text(1.5 * np.cos(0.5 *np.pi - 2 * np.pi * (float(value) % objective /objective)),
             1.5 * np.sin(0.5 *np.pi - 2 * np.pi * (float(value) % objective / objective)),
                     str(round(value, 2)),
