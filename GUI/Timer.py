@@ -1,39 +1,48 @@
 import time
 import tkinter as tk
-from tkinter import StringVar, Entry, Label, Button
 from tkinter import messagebox
-from helpers import add_website_link
+from .helpers import add_website_link, set_plot_color
 import numpy as np
 import pandas as pd
 import requests
 import json
 from io import StringIO
-from Calendar import Calendar
 from datetime import datetime
 from datetime import date
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
-
+import tkinter.ttk as ttk
+import googleapiclient
 import pygsheets
 import pandas as pd
+import sys
+import os
+
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 class Timer():
     """
     Class to handle the POMODORO timer but also the links to the stretching
     websites
     """
-    def __init__(self, window: tk.Frame, objective: float) -> None:
+    def __init__(self, window: ttk.Frame, objective: float, bg_string: str, fg_string: str, color_theme: str) -> None:
         """
         Initialize the frame with the timer and the links
 
         :param window: the window frame where to place the timer and the links
-        :type window: tk.Frame
+        :type window: ttk.Frame
         """
         self.window = window
         self.min = np.inf
         self.run = False
         self.objective = objective
+        self.bg_string = bg_string
+        self.fg_string = fg_string
+        self.color_theme = color_theme
+        self.color = plt.get_cmap(self.color_theme)
+        self.colormap = self.color(np.linspace(0, 1, 7))[1:-1]
 
         # Create empty dataframe
         self.timer_dict = {"event": [],
@@ -48,8 +57,8 @@ class Timer():
         }
 
         self.load_data()
-        self.plot_frame = tk.Frame(self.window, bg='white')
-        self.plot_frame.pack(side='top', fill='both', expand=True)
+        self.plot_frame = ttk.Frame(self.window)
+        self.plot_frame.pack(side='top', anchor = 'c', fill='both', expand=True)
         total_time = self.compute_time()
         self.add_radial_plot(total_time)
         self.add_timer()
@@ -66,9 +75,9 @@ class Timer():
 
     def play(self):
         self.run = True
-        print(hasattr(self, 'submit_thread'))
+        # print(hasattr(self, 'submit_thread'))
         if not hasattr(self, 'submit_thread'):
-            print("start new one")
+            # print("start new one")
             self.event = threading.Event()
             self.submit_thread = threading.Thread(target=self.submit, args=(self.event,))
             self.submit_thread.daemon = True
@@ -127,7 +136,7 @@ class Timer():
                 toplevel.title("Time Countdown")
                 toplevel.attributes('-topmost', 'true')
                 # toplevel.state('zoomed')
-                label = tk.Label(toplevel,
+                label = ttk.Label(toplevel,
                                  text="Time's up. Take a break, here are some stretching links:",
                                  font=("Arial",18,""))
                 label.pack(side=tk.TOP)
@@ -182,14 +191,50 @@ class Timer():
         """
         Add a timer in the upper right part of the GUI
         """
+        offline_frame = ttk.Frame(self.window)
+        offline_frame.pack(side=tk.TOP, anchor = 'c',fill='both', expand=True)
 
-        timer_frame = tk.Frame(self.window, bg='white')
-        timer_frame.pack(side=tk.BOTTOM, fill='both', expand=True)
+        offline_label = ttk.Label(offline_frame, text="Enter offline work: ", font=("Aerial",18))
+        offline_label.pack(side = tk.TOP)
+
+        self.category = ttk.Entry(offline_frame, font=('Aerial', 14))
+        self.category.bind("<Button-1>", lambda e: self.category.delete(0, tk.END))
+        self.category.insert(0,'Category')
+        self.category.pack(side = tk.TOP)
+
+        self.description = ttk.Entry(offline_frame, font=('Aerial', 14))
+        self.description.bind("<Button-1>", lambda e: self.description.delete(0, tk.END))
+        self.description.insert(0,'Description')
+        self.description.pack(side = tk.TOP)
+
+        self.start = ttk.Entry(offline_frame, font=('Aerial', 14))
+        self.start.bind("<Button-1>", lambda e: self.start.delete(0, tk.END))
+        self.start.insert(0,'start')
+        self.start.pack(side = tk.TOP)
+
+        self.end = ttk.Entry(offline_frame, font=('Aerial', 14))
+        self.end.bind("<Button-1>", lambda e: self.end.delete(0, tk.END))
+        self.end.insert(0,'end')
+        self.end.pack(side = tk.TOP)
+
+        self.date = ttk.Entry(offline_frame, font=('Aerial', 14))
+        self.date.insert(0, date.today())
+        self.date.pack(side = tk.TOP)
+
+        enter_offline = ttk.Button(offline_frame, text="Enter",
+                                   command= self.enter_offline_work,
+                                   style='my.TButton')
+        enter_offline.pack(side = tk.TOP)
+
+        timer_frame1 = ttk.Frame(self.window)
+        timer_frame1.pack(side=tk.TOP, anchor = 'c', fill='both', expand=True)
+        timer_frame2 = ttk.Frame(self.window)
+        timer_frame2.pack(side=tk.TOP, anchor = 'c', fill='both', expand=True)
 
         # Declaration of variables
-        self.hour=StringVar()
-        self.minute=StringVar()
-        self.second=StringVar()
+        self.hour=tk.StringVar()
+        self.minute=tk.StringVar()
+        self.second=tk.StringVar()
 
         # Setting the default value as 50 minutes (preferred time for a pomodoro)
         self.reset()
@@ -199,62 +244,29 @@ class Timer():
         # # timer_label.pack(side = tk.TOP)
 
         # Use of Entry class to take input from the user
-        hourEntry= Entry(timer_frame, width=3, font=("Arial",18,""),
+        hourEntry= ttk.Entry(timer_frame1, width=3, font=('Aerial', 18),
                          textvariable=self.hour)
         # place it in upper right corner
-        hourEntry.pack(side = tk.LEFT)
+        hourEntry.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
 
-        minuteEntry= Entry(timer_frame, width=3, font=("Arial",18,""),
+        minuteEntry= ttk.Entry(timer_frame1, width=3, font=('Aerial', 18),
                            textvariable=self.minute)
-        minuteEntry.pack(side = tk.LEFT)
+        minuteEntry.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
 
-        secondEntry= Entry(timer_frame, width=3, font=("Arial",18,""),
+        secondEntry= ttk.Entry(timer_frame1, width=3, font=('Aerial', 18),
                            textvariable=self.second)
-        secondEntry.pack(side = tk.LEFT)
+        secondEntry.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
 
         # Button widget to start the countdown
-        btn = Button(timer_frame, text='Start', font=("Arial",18),
-                    command=self.play)
-        btn.pack(side = tk.LEFT)
-        btn = Button(timer_frame, text='Pause', font=("Arial",18),
-                    command= self.pause)
-        btn.pack(side = tk.LEFT)
-        btn = Button(timer_frame, text='Stop', font=("Arial",18),
-                    command= self.stop)
-        btn.pack(side = tk.LEFT)
-
-        offline_frame = tk.Frame(self.window, bg='white')
-        offline_frame.pack(side=tk.TOP, fill='both', expand=True)
-
-        offline_label = tk.Label(offline_frame, text="Enter offline work: ", font=("Arial",18), bg='white')
-        offline_label.pack(side = tk.TOP)
-
-        self.category = Entry(offline_frame)
-        self.category.bind("<Button-1>", lambda e: self.category.delete(0, tk.END))
-        self.category.insert(0,'Category')
-        self.category.pack(side = tk.TOP)
-
-        self.description = Entry(offline_frame)
-        self.description.bind("<Button-1>", lambda e: self.description.delete(0, tk.END))
-        self.description.insert(0,'Description')
-        self.description.pack(side = tk.TOP)
-
-        self.start = Entry(offline_frame)
-        self.start.bind("<Button-1>", lambda e: self.start.delete(0, tk.END))
-        self.start.insert(0,'start')
-        self.start.pack(side = tk.TOP)
-
-        self.end = Entry(offline_frame)
-        self.end.bind("<Button-1>", lambda e: self.end.delete(0, tk.END))
-        self.end.insert(0,'end')
-        self.end.pack(side = tk.TOP)
-
-        enter_offline = tk.Button(offline_frame, text="Enter", font=("Arial",18),
-                                  command= self.enter_offline_work)
-        enter_offline.pack(side = tk.TOP)
+        btn = ttk.Button(timer_frame2, text='Start', command=self.play, style='my.TButton')
+        btn.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
+        btn = ttk.Button(timer_frame2, text='Pause', command= self.pause, style='my.TButton')
+        btn.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
+        btn = ttk.Button(timer_frame2, text='Stop', command= self.stop, style='my.TButton')
+        btn.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
 
 
-    def add_links(self, window: tk.Frame) -> None:
+    def add_links(self, window: ttk.Frame) -> None:
         """
         Add links to the stretching websites on the GUI
         """
@@ -264,13 +276,19 @@ class Timer():
             "https://www.healthline.com/health/deskercise",
             "https://www.verywellfit.com/best-stretches-for-office-workers-1231153"
         ]
-        font = ('Aerial 12')
+        font = ('Aerial', '16', 'underline')
         side = "bottom"
 
-        add_website_link(window, urls[0], texts[0], font, side, fg = 'blue', bg='white')
-        add_website_link(window, urls[1], texts[1], font, side, fg = 'blue', bg='white')
+        add_website_link(window, urls[0], texts[0], font, side, fg = self.fg_string, bg=self.bg_string)
+        add_website_link(window, urls[1], texts[1], font, side, fg = self.fg_string, bg=self.bg_string)
 
     def enter_offline_work(self):
+        try:
+            datetime.strptime(self.start.get(), "%H:%M")
+            datetime.strptime(self.end.get(), "%H:%M")
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid time")
+            return
         self.offline_dict['category'].append(self.category.get())
         self.offline_dict['description'].append(self.description.get())
         self.offline_dict['start'].append(self.start.get())
@@ -288,9 +306,11 @@ class Timer():
             for _, row in today_work.iterrows():
                 self.timer_dict["event"].append(row['event'])
                 self.timer_dict["time"].append(row['time'])
-            self.timer_suppress = len(self.timer_dict["event"])
         except KeyError:
             pass
+        except TypeError:
+            print("Fail to load timer data")
+        self.timer_suppress = len(self.timer_dict["event"])
 
         df_drive, _ = self.get_data('offline_work.csv')
         # find columns where the date is today
@@ -305,21 +325,30 @@ class Timer():
                 self.offline_dict["date"].append(row['date'])
         except KeyError:
             pass
+        except TypeError:
+            print("Fail to load offline data")
         self.offline_suppress = len(self.offline_dict["category"])
 
     def get_data(self, name):
         # authorization
-        gc = pygsheets.authorize(service_file='creditentials/spotify-402405-59d8f4e06e41.json')
+        try:
+            gc = pygsheets.authorize(service_file='creditentials/spotify-402405-59d8f4e06e41.json')
+        except FileNotFoundError:
+            gc = pygsheets.authorize(service_file=os.path.join(sys.path[-1],
+                                                               'creditentials/spotify-402405-59d8f4e06e41.json'))
         #open the google spreadsheet (where 'PY to Gsheet Test' is the name of my sheet)
         # DO NOT FORGET TO SHARE THE SPREADSHEET
-        sh = gc.open(name)
+        try:
+            sh = gc.open(name)
+            #select the first sheet
+            wks = sh[0]
 
-        #select the first sheet
-        wks = sh[0]
-
-        # existing df
-        df_drive = wks.get_as_df()
-        return df_drive, wks
+            # existing df
+            df_drive = wks.get_as_df()
+            return df_drive, wks
+        except googleapiclient.errors.HttpError:
+            print(f"HTTP error when trying to access {name}")
+            return None, None
 
     def save_data(self):
         df_drive, wks = self.get_data('timer_data.csv')
@@ -358,8 +387,6 @@ class Timer():
         # ax.set_title("Time spent working today", va='bottom')
         # ax.bar(x=0, height=time/(self.objective*3600), width=2*np.pi, color='green')
         # base styling logic
-        color_theme = 'plasma'
-        color = plt.get_cmap(color_theme)
         ring_width = 0.3
         outer_radius = 1.5
         inner_radius = outer_radius - ring_width
@@ -372,21 +399,24 @@ class Timer():
         if value > self.objective:
             ring_to_label = 0
             outer_edge_color = None
-            inner_edge_color = 'white'
+            inner_edge_color = self.fg_string
         else:
             ring_to_label = 1
-            outer_edge_color, inner_edge_color = ['white', None]
+            outer_edge_color, inner_edge_color = [self.fg_string, None]
 
         # plot logic
-        outer_ring, _ = ax.pie(ring_arrays[0],radius=1.5,
-                            colors=[color(0.9), color(0.15)],
-                            startangle = 90,
-                            counterclock = False)
-        plt.setp( outer_ring, width=ring_width, edgecolor=outer_edge_color)
+        try:
+            outer_ring, _ = ax.pie(ring_arrays[0], radius=1.5,
+                                colors=[self.colormap[-1], self.colormap[0]],
+                                startangle = 90,
+                                counterclock = False)
+            plt.setp( outer_ring, width=ring_width, edgecolor=outer_edge_color)
+        except ValueError:
+            pass
         try:
             inner_ring, _ = ax.pie(ring_arrays[1],
                                     radius=inner_radius,
-                                    colors=[color(0.55), color(0.05)],
+                                    colors=[self.colormap[-2], self.colormap[1]],
                                     startangle = 90,
                                     counterclock = False)
             plt.setp(inner_ring, width=ring_width, edgecolor=inner_edge_color)
@@ -394,15 +424,17 @@ class Timer():
             pass
 
         # add labels and format plots
-        add_center_label(value, self.objective)
-        add_current_label(value, self.objective)
-        add_sub_center_label(self.objective)
+        add_center_label(value, self.objective, self.fg_string)
+        add_current_label(value, self.objective, self.fg_string)
+        add_sub_center_label(self.objective, self.fg_string)
         ax.axis('equal')
         plt.margins(0,0)
         plt.autoscale('enable')
+        fig, self.ax = set_plot_color(fig, ax, self.fg_string)
         # plt.show()
         self.canvas = FigureCanvasTkAgg(fig, master=self.plot_frame)
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
+        self.canvas.get_tk_widget().config(bg=self.bg_string)
         self.canvas.draw()
         self.window.update()
 
@@ -447,7 +479,7 @@ def vertical_aligner(value, objective):
 #USE: Create a center label in the middle of the radial chart.
 #INPUT: a df of row length 1 with the first column as the current metric value and the second column is the target metric value
 #OUTPUT: the proper text label
-def add_center_label(value, objective):
+def add_center_label(value, objective, color):
     percent = str(round(1.0*value/objective*100,1)) + '%'
     return plt.text(0,
            0.2,
@@ -455,12 +487,13 @@ def add_center_label(value, objective):
            horizontalalignment='center',
            verticalalignment='center',
            fontsize = 40,
+           color=color,
            family = 'sans-serif')
 
 #USE: Create a dynamic outer label that servers a pointer on the ring.
 #INPUT: a df of row length 1 with the first column as the current metric value and the second column is the target metric value
 #OUTPUT: the proper text label at the apropiate position
-def add_current_label(value, objective):
+def add_current_label(value, objective, color):
     # print('vertical: ' + vertical_aligner(value, objective))
     # print('horizontal: ' + horizontal_aligner(value, objective))
     return plt.text(1.5 * np.cos(0.5 *np.pi - 2 * np.pi * (float(value) % objective /objective)),
@@ -469,13 +502,15 @@ def add_current_label(value, objective):
                     horizontalalignment=horizontal_aligner(value, objective),
                     verticalalignment=vertical_aligner(value, objective),
                     fontsize = 20,
+                    color=color,
                     family = 'sans-serif')
 
-def add_sub_center_label(objective):
+def add_sub_center_label(objective, color):
     amount = 'Goal: ' + str(objective) + 'h'
     return plt.text(0,
             -.1,
             amount,
+            color=color,
             horizontalalignment='center',
             verticalalignment='top',
             fontsize = 22,family = 'sans-serif')

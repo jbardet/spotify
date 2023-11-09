@@ -18,7 +18,7 @@ class Calendar():
         Initialize the calendar class with credentials and the calendar id
         """
         # If modifying these scopes, delete the file token.json.
-        self.scopes = ['https://www.googleapis.com/auth/calendar.readonly']
+        self.scopes = ['https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/spreadsheets']
         self.creds = self.get_token()
         self.calendar_id = ""
         # id_client = ""

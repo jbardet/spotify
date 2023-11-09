@@ -3,22 +3,20 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tkinter import StringVar, Canvas, Label, Button
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg)
 import tkinter as tk
 from typing import List, Tuple
 import pandas as pd
-from helpers import round_point_00_2
 from matplotlib.patches import Polygon
 from wordcloud import WordCloud
 from typing import Dict
 import tkinter.ttk as ttk
 import json
 import math
-from DraggablePoint import DraggablePoint
-from helpers import add_website_link
-from SpotifyPlayer import SpotifyPlayer
+from .DraggablePoint import DraggablePoint
+from .helpers import add_website_link, set_plot_color, _from_rgb, round_point_00_2
+from .SpotifyPlayer import SpotifyPlayer
 import threading
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 try:
     from ..Database import Database
@@ -39,7 +37,7 @@ class Radar():
     """
     Interactive Radar plot class to choose parameters to create playlists
     """
-    def __init__(self, spotify_cr: Dict[str, str], db_cr: Dict[str, str],  window: tk.Frame):
+    def __init__(self, spotify_cr: Dict[str, str], db_cr: Dict[str, str],  window: ttk.Frame, bg_string:str, fg_string:str, color_theme: str):
         self.window = window
         self.move_flag = False
         self.area = None
@@ -47,13 +45,17 @@ class Radar():
         self.__db_password = db_cr['password']
         self.__db_name = db_cr["db_name"]
         self.__spotify_cr = spotify_cr
+        self.bg_string = bg_string
+        self.fg_string = fg_string
+        self.color_theme = color_theme
+        self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 7))[1:-1]
 
         # add spotify website link on to spotify
         text = "Spotify"
         url = "https://open.spotify.com/?"
-        font= ('Aerial 12')
+        font= ('Aerial', '16', 'underline')
         side = "top"
-        add_website_link(self.window, url, text, font, side, fg = 'blue', bg = 'white')
+        add_website_link(self.window, url, text, font, side, fg = self.fg_string, bg = self.bg_string)
 
         # # Test of some genres analysis
         # self.analyze_artists()
@@ -84,21 +86,25 @@ class Radar():
                    speechiness, instrumentalness, loudness, tempo]
         self.angles += self.angles[:1]
         self.values += self.values[:1]
-        n = math.ceil(len(self.values)/3)
-        label_frames = []
-        for _ in range(n):
-            label_frame =  tk.Frame(self.window, bg='white')
-            label_frame.pack(side='top', anchor='center', fill='both', expand=True)
-            label_frames.append(label_frame)
-        self.display_labels(label_frames)
+        # n = math.ceil(len(self.values)/3)
+        # label_frames = []
+        # for _ in range(n):
+        #     label_frame =  ttk.Frame(self.window)
+        #     label_frame.pack(side='top', anchor='c', fill='both', expand=True)
+        #     label_frames.append(label_frame)
+        label_frame = ttk.Frame(self.window)
+        label_frame.pack(side='top', anchor='c', fill='both', expand=True)
+        label_frame.grid_columnconfigure(tuple(range(3)), weight=1)
+        label_frame.grid_rowconfigure(tuple(range(3)), weight=1)
+        self.display_labels(label_frame)
         self.add_playlist_buttons()
         # Initialize the violin plots to show the distribution of the data
         self.violin_pos, self.violin_neg = None, None
 
         # let's make a spotify player to play songs
-        spotify_player_frame = tk.Frame(self.window, bg='white')
-        spotify_player_frame.pack(side='bottom', anchor='center', fill='both', expand=True)
-        SpotifyPlayer(spotify_player_frame, self.__spotify_cr)
+        spotify_player_frame = ttk.Frame(self.window)
+        spotify_player_frame.pack(side='bottom', anchor='c', fill='both', expand=True)
+        self.spotify_player = SpotifyPlayer(spotify_player_frame, self.__spotify_cr, self.fg_string, self.bg_string)
 
     def analyze_artists(self) -> None:
         """
@@ -138,24 +144,32 @@ class Radar():
         """
         # add a button for each playlist
         # Show examples of playlists' distributions
-        playlist_frame = tk.Frame(self.window, bg='white')
-        playlist_frame.pack(side='top', anchor='center', fill='both', expand=True)
-        with open("Playlists/playlists.json", "r") as file:
-            playlists = json.load(file)[0]
+        playlist_frame = ttk.Frame(self.window)
+        playlist_frame.pack(side='top', anchor='c', fill='both', expand=True)
+        try:
+            with open("Playlists/playlists.json", "r") as file:
+                playlists = json.load(file)[0]
+        except FileNotFoundError:
+            with open(os.path.join(sys.path[-1], "Playlists/playlists.json"), "r") as file:
+                playlists = json.load(file)[0]
         # for key, value in playlists.items():
         #     show_playlist
-        # current_table = tk.StringVar() # create variable for table
-        # combo = tk.Combobox(playlist_frame, values = list(playlists.keys()))
+        # current_table = ttk.StringVar() # create variable for table
+        # combo = ttk.Combobox(playlist_frame, values = list(playlists.keys()))
         # self.config
         # # (playlist_frame, text = key, command = lambda value=value: self.show_playlist(value))
-        # button.pack(side = tk.LEFT)
-        table = TableDropDown(playlist_frame, list(playlists.keys()))
+        # button.pack(side = ttk.LEFT)
+        text_font=('Aerial', 16)
+        table = TableDropDown(playlist_frame, list(playlists.keys()), font=text_font)
         def print_value():
             print(table.current_table.get())
             self.show_playlist(playlists[table.current_table.get()])
+        playlist_frame.option_add('*TCombobox*Listbox.font', text_font)
+        table.pack(side="left", anchor = 'c',fill='both', expand=True)
 
-        b = Button(playlist_frame, text='Show playlist', command = print_value)
-        b.pack(side = "left")
+        b = ttk.Button(playlist_frame, text='Show playlist', command = print_value,
+                       style='my.TButton')
+        b.pack(side = "left", anchor = 'c',fill='both', expand=True)
         # print(table.table.get())
 
     def show_playlist(self, values: dict):
@@ -191,7 +205,7 @@ class Radar():
             violin_neg.set_alpha(0.5)
             self.violins.append([violin_pos, violin_neg])
 
-    def display_labels(self, windows = tk.Frame) -> None:
+    def display_labels(self, window = ttk.Frame) -> None:
         """
         Display the labels of the variables on the GUI
         """
@@ -199,14 +213,17 @@ class Radar():
         for i in range(len(self.cols)):
             # create a label for each variable and place it on the GUI on the left
             # part of the window, each one down the other
-            text = StringVar()
+            text = tk.StringVar()
             text.set(self.cols[i]+": "+ str(self.values[i]))
-            label = Label(windows[i//3], text = text.get())
+            # label = ttk.Label(window[i//3], text = text.get(), font=("Arial",14))
+            label = ttk.Label(window, text = text.get(), font=("Arial",14))
             # increase size of label text
-            label.config(font=("Arial", 12), background='white')
+            # label.config(font=("Arial", 12), background='white')
             # TODO: change and place closer to the graph's axes
             # label.place(x = 20, y = 60 + 60 * i)
-            label.pack(side = tk.LEFT)
+            # label.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
+            label.grid(row=i//3, column=i%3, sticky="nsew")
+            # label.place(anchor='center', relx =i//3*0.5, rely=i%3*0.3)
             self.labels.append(label)
 
     def change_value(self, i: int) -> None:
@@ -225,9 +242,9 @@ class Radar():
         """
         for area in self.area:
             area.remove()
-        self.area = self.ax.fill(self.angles, self.values, color='blue', alpha=0.6)
+        self.area = self.ax.fill(self.angles, self.values, color=_from_rgb(self.color_palette[0]), alpha=0.7)
 
-    def create_draggable_points(self, canvas: Canvas) -> List[DraggablePoint]:
+    def create_draggable_points(self, canvas: tk.Canvas) -> List[DraggablePoint]:
         """
         Creates a draggable point for each variable
 
@@ -240,7 +257,7 @@ class Radar():
         for i in range(len(self.angles)):
             # add self to you can pass a reference to the Graph instance to
             # the Point class when you create the points
-            point = DraggablePoint(self, canvas, self.ax, self.angles, self.values, i)
+            point = DraggablePoint(self, canvas, self.ax, self.angles, self.values, i, _from_rgb(self.color_palette[-1]))
             points.append(point)
         return points
 
@@ -285,10 +302,10 @@ class Radar():
         self.ax.set_theta_direction(-1)
 
         # Draw axis lines for each angle and label with its associated value.
-        self.ax.set_thetagrids(np.degrees(self.angles[:-1]), self.cols)
+        self.ax.set_thetagrids(np.degrees(self.angles[:-1]), self.cols, fontsize=14)
 
         # You can also set gridlines manually like this:
-        self.ax.set_rgrids([0, 0.2, 0.4, 0.6, 0.8, 1])
+        self.ax.set_rgrids([0, 0.2, 0.4, 0.6, 0.8, 1], fontsize=12)
 
         # Create a colormap from green to red
         db = Database(self.__db_id, self.__db_password, self.__db_name)
@@ -308,17 +325,20 @@ class Radar():
 
         self.ax.set_rlabel_position(40)
         plt.autoscale(enable=False)
+        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
 
         canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = canvas.get_tk_widget()
+        canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
 
         points = self.create_draggable_points(canvas)
-        self.area = self.ax.fill(self.angles, self.values, color='blue', alpha=0.6)
+        self.area = self.ax.fill(self.angles, self.values, color=_from_rgb(self.color_palette[0]), alpha=0.7)
 
         # add a button to create a playlist
-        self.button = Button(self.window, text = "Create Playlist",
-                             command = self.create_playlist)
+        self.button = ttk.Button(self.window, text = "Create Playlist",
+                                 command = self.create_playlist,
+                                 style='my.TButton')
         self.button.pack(side = tk.BOTTOM)
 
         self.window.mainloop()
@@ -366,11 +386,11 @@ class Radar():
         polygon_polar_data_points[:,0] = polygon_polar_data_points[:,0]+i*2*np.pi/len(self.cols)
 
         # creates the violinplot from the Polygons
-        violin_pos = Polygon(np.array(polygon_polar_data_points), color = "grey", alpha=0.5)
+        violin_pos = Polygon(np.array(polygon_polar_data_points), color = self.fg_string, alpha=0.5)
         self.ax.add_patch(violin_pos)
         # create the same polygon but now with negative values
         polygon_polar_data_points[:,0] = 4*i*np.pi/len(self.cols)-polygon_polar_data_points[:,0]
-        violin_neg = Polygon(np.array(polygon_polar_data_points), color = "grey", alpha=1)
+        violin_neg = Polygon(np.array(polygon_polar_data_points), color = self.fg_string, alpha=0.5)
         self.ax.add_patch(violin_neg)
 
         return violin_pos, violin_neg
@@ -386,7 +406,7 @@ class Radar():
             client.create_playlist(self.songs, "Test Playlist")
         else:
             # display a message if no songs were found on the GUI
-            label = Label(self.window, text = "No songs found, please modify parameters")
+            label = ttk.Label(self.window, text = "No songs found, please modify parameters")
             label.pack()
             # maybe later give direction what to change to find things
 
@@ -459,9 +479,9 @@ class Radar():
         return values, boundaries
 
 class TableDropDown(ttk.Combobox):
-    def __init__(self, parent, values):
+    def __init__(self, parent, values, font):
         self.current_table = tk.StringVar() # create variable for table
-        ttk.Combobox.__init__(self, parent)#  init widget
+        ttk.Combobox.__init__(self, parent, font=font)#  init widget
         self.config(textvariable = self.current_table, state = "readonly", values = values)
         self.current(0) # index of values for current table
         self.pack(side="left") # place drop down box

@@ -9,25 +9,30 @@ import numpy as np
 from todoist_api_python.api import Task
 from todoist_api_python.api import TodoistAPI
 import requests
+import sys
 import pytz
 import matplotlib.pyplot as plt
+import tkinter.ttk as ttk
+from ttkwidgets import CheckboxTreeview
 
-from helpers import add_website_link
-from helpers import _from_rgb
+from .helpers import add_website_link, _from_rgb
 
 class Todoist():
-    def __init__(self, key: str,  window: tk.Frame) -> None:
+    def __init__(self, key: str,  window: ttk.Frame, bg_string: str, fg_string: str, color_theme: str) -> None:
         """
         Initialize the Todoist class with the tasks from Todoist
 
         :param key: the key to access Todoist's API
         :type key: str
         :param window: the window frame where to place the tasks list
-        :type window: tk.Frame
+        :type window: ttk.Frame
         """
         self.__key = key
         self.window = window
-        self.color_theme = "plasma"
+        self.bg_string = bg_string
+        self.fg_string = fg_string
+        self.color_theme = color_theme
+        self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 7))[1:-1]
 
         self.tasks = self.get_tasks()
 
@@ -159,8 +164,12 @@ class Todoist():
         #     print(error)
         # with open("tasks.pkl", "wb") as file:
         #     pickle.dump(tasks, file)
-        with open("tasks.pkl", "rb") as file:
-            tasks = pickle.load(file)
+        try:
+            with open("tasks.pkl", "rb") as file:
+                tasks = pickle.load(file)
+        except FileNotFoundError:
+            with open(os.path.join(sys.path[-1], "tasks.pkl"), "rb") as file:
+                tasks = pickle.load(file)
         return tasks
 
     def add_tasks(self) -> None:
@@ -180,9 +189,9 @@ class Todoist():
         """
         text = "Todoist"
         url = "https://todoist.com/app/project/2313332067"
-        font = ('Aerial 12')
+        font = ('Aerial', '16', 'underline')
         side = "top"
-        add_website_link(self.window, url, text, font, side, fg = "black", bg = "white")
+        add_website_link(self.window, url, text, font, side, fg = self.fg_string, bg = self.bg_string)
 
     def add_tasks_list(self):
         """
@@ -194,45 +203,56 @@ class Todoist():
         # 'is_favorite', 'is_inbox_project', 'is_shared', 'is_team_inbox',
         # 'name', 'order', 'parent_id', 'url', 'view_style'])
 
-        # Define the function that changes the color of the selected item
-        def change_color() -> None:
-            """
-            Change the color of the selected item in the list of tasks
-            """
-            # Get the index of the selected item
-            active_selection = self.tasks_listbox.curselection()
+        # # Define the function that changes the color of the selected item
+        # def change_color() -> None:
+        #     """
+        #     Change the color of the selected item in the list of tasks
+        #     """
+        #     # Get the index of the selected item
+        #     active_selection = self.tasks_listbox.curselection()
 
-            # Change the background color of the selected item
-            # if green change to red and if red change to white
-            if active_selection:
-                if self.tasks_listbox.itemcget(active_selection,
-                                               "background") == "green":
-                    self.tasks_listbox.itemconfig(active_selection,
-                                                  bg=self.task_colors[active_selection[0]])
-                else:
-                    self.tasks_listbox.itemconfig(active_selection, bg='green')
+        #     # Change the background color of the selected item
+        #     # if green change to red and if red change to white
+        #     if active_selection:
+        #         if self.tasks_listbox.itemcget(active_selection,
+        #                                        "background") == "green":
+        #             self.tasks_listbox.itemconfig(active_selection,
+        #                                           bg=self.task_colors[active_selection[0]])
+        #         else:
+        #             self.tasks_listbox.itemconfig(active_selection, bg='green')
 
-         # Create the listbox to display the tasks
-        self.tasks_listbox = tk.Listbox(self.window, bg='white',
-                                        height=10, width=40, font=('Arial', 18),
-                                        justify='center')
-        self.tasks_listbox.pack(side = tk.TOP)
-        colors = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 4))
-        colors = [_from_rgb(color) for color in colors]
+        # Create the listbox to display the tasks
+        # self.tasks_listbox = tk.Listbox(self.window, bg=self.bg_string,
+        #                                 height=10, width=40, font=('Arial', 18),
+        #                                 justify='center')
+        # self.tasks_listbox.pack(side = tk.TOP)
+        scrollbar = ttk.Scrollbar(self.window)
+        # self.tasks_listbox = ttk.Treeview(self.window, yscrollcommand=scrollbar.set, show="tree")
+        self.tasks_listbox = CheckboxTreeview(self.window, yscrollcommand=scrollbar.set, show="tree", height=5)
+        scrollbar.configure(command=self.tasks_listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.tasks_listbox.pack(side="left", fill="both", expand=True)
+
+        colors = [_from_rgb(color) for color in self.color_palette]
         colors.reverse()
         self.task_colors = []
-        for i, task in enumerate(self.tasks):
-            due_date = task.due.date.split("-")
-            due_date = datetime.date(eval(due_date[0]),
-                                     eval(due_date[1]),
-                                     eval(due_date[2]))
-            color = colors[task.priority-1]
-            self.task_colors.append(color)
-            self.tasks_listbox.insert(i,
-                                      task.content+" due: "+str((due_date-datetime.date.today()).days+1))
-            self.tasks_listbox.itemconfig(i, {'bg':color})
-
+        for _ in range(5):
+            for i, task in enumerate(self.tasks):
+                due_date = task.due.date.split("-")
+                due_date = datetime.date(eval(due_date[0]),
+                                        eval(due_date[1]),
+                                        eval(due_date[2]))
+                color = colors[task.priority-1]
+                self.task_colors.append(color)
+                # self.tasks_listbox.insert(i,
+                #                           task.content+" due: "+str((due_date-datetime.date.today()).days+1))
+                self.tasks_listbox.insert('', i,
+                                        text=task.content+" due: "+str((due_date-datetime.date.today()).days+1),
+                                        tags=(color,))
+                # self.tasks_listbox.itemconfig(i, {'bg':color})
+        for color in colors:
+            self.tasks_listbox.tag_configure(color, background=color, font=('Aerial', 16), foreground = 'black')
         # bind the button to the function that changes the color of the selected
-        self.tasks_listbox.bind('<<ListboxSelect>>', lambda event: change_color())
+        # self.tasks_listbox.bind('<<ListboxSelect>>', lambda event: change_color())
 
 

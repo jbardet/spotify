@@ -48,3 +48,20 @@ def add_website_link(window: tk.Frame, url: str, text: str, font: str, side: str
     label.pack(side = side, expand = True)
     label.bind("<Button-1>", lambda e: open_url(url))
 
+def set_plot_color(fig, ax, fg_string):
+    fig.set_facecolor("none")
+    ax.set_facecolor("none")
+    try:
+        ax.spines['bottom'].set_color(fg_string)
+        ax.spines['top'].set_color(fg_string)
+        ax.spines['right'].set_color(fg_string)
+        ax.spines['left'].set_color(fg_string)
+    except KeyError:
+        ax.spines['polar'].set_color(fg_string)
+    ax.tick_params(axis='x', colors=fg_string)
+    ax.tick_params(axis='y', colors=fg_string)
+    ax.yaxis.label.set_color(fg_string)
+    ax.xaxis.label.set_color(fg_string)
+    ax.title.set_color(fg_string)
+    return fig, ax
+

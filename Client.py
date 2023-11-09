@@ -97,6 +97,28 @@ class APIClient:
         # webbrowser.open(pl['uri'])
         sp.start_playback(context_uri=pl['uri'])
 
+    def play(self):
+        sp = spotipy.Spotify(auth=self.__tokens[0])
+        try:
+            sp.start_playback()
+        except spotipy.exceptions.SpotifyException:
+            pass
+
+    def pause(self):
+        sp = spotipy.Spotify(auth=self.__tokens[0])
+        try:
+            sp.pause_playback()
+        except spotipy.exceptions.SpotifyException:
+            pass
+
+    def next(self):
+        sp = spotipy.Spotify(auth=self.__tokens[0])
+        sp.next_track()
+
+    def previous(self):
+        sp = spotipy.Spotify(auth=self.__tokens[0])
+        sp.previous_track()
+
     def __call_api(self, params: List[Tuple], name: str = None, type: str = 'search'):
         headers = {
             'Accept': 'application/json',

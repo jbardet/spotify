@@ -17,8 +17,9 @@ import matplotlib.pyplot as plt
 from rauth import OAuth2Service
 from urllib.parse import parse_qsl
 from datetime import timedelta as td
+import tkinter.ttk as ttk
 
-from helpers import add_website_link
+from .helpers import add_website_link, set_plot_color
 
 # TODO: change date in the API calls to today's date from last week? or only today?
 # TODO: add a connection to a database to save results (or on disk might be easier)
@@ -27,7 +28,7 @@ class RescueWakaTime():
     """
     Integrate a Rescue time window to see your daily activity
     """
-    def __init__(self, rescue_key: str, waka_key: str, window: tk.Frame) -> None:
+    def __init__(self, rescue_key: str, waka_key: str, window: ttk.Frame, bg_string: str, fg_string: str, color_theme: str) -> None:
         """
         Initialize the RescueTime class from the API key and the GUI window
         where to place it
@@ -35,11 +36,13 @@ class RescueWakaTime():
         :param key: the user key to access the API
         :type key: str
         :param window: the window where to place the RescueTime widget
-        :type window: tk.Frame
+        :type window: ttk.Frame
         """
         self.__rescue_key = rescue_key
         self.__waka_key = waka_key['key']
         self.window = window
+        self.bg_string = bg_string
+        self.fg_string = fg_string
         today = datetime.date.today()
         self.today = f"{today.year}-{today.month}-{today.day}"
 
@@ -52,8 +55,8 @@ class RescueWakaTime():
         self.activity_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=rank&restrict_kind=activity&interval=hour&restrict_begin={self.today}&restrict_end={self.today}&format=json"
 
         # self.color_palette = self.create_color_palette()
-        self.color_theme = "plasma"
-        self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 5))
+        self.color_theme = color_theme
+        self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 7))[1:-1]
         self.color_palette = np.flip(self.color_palette, 0)
 
     def save_data(self):
@@ -539,8 +542,8 @@ class RescueWakaTime():
         - a button to turn on/off RescueTime when going on a break
         """
 
-        link_frame = tk.Frame(self.window, bg='white')
-        link_frame.pack(side='top', anchor='n', fill='both', expand=True)
+        link_frame = ttk.Frame(self.window)
+        link_frame.pack(side='top', anchor='c', fill='both', expand=True)
 
         text = "RescueTime"
         url = "https://www.rescuetime.com/rtx/reports/activities"
@@ -563,10 +566,10 @@ class RescueWakaTime():
     def add_wakatime_plot(self, df: pd.DataFrame) -> None:
         status_call = "https://wakatime.com/api/v1/users/current/status_bar/today?api_key="+self.__waka_key
         status_bar = requests.get(status_call).json()
-        with open("status_bar.pickle", "wb") as file:
-            pickle.dump(status_bar, file)
-        with open('status_bar.pickle', 'rb') as handle:
-            status_bar = pickle.load(handle)
+        # with open("status_bar.pickle", "wb") as file:
+        #     pickle.dump(status_bar, file)
+        # with open('status_bar.pickle', 'rb') as handle:
+        #     status_bar = pickle.load(handle)
         # status bar: ['grand_total', 'range', 'projects', 'languages', 'dependencies', 'machines', 'editors', 'operating_systems', 'categories']
         rt_tot_time = df['time'].sum()/3600
         try:
@@ -585,16 +588,18 @@ class RescueWakaTime():
         plt.ylabel("Time (hours)")
         labels = ["RT_tot", "RT_prod", "RT_VS", "WT_tot"] + [cat['name'] for cat in categories]
         values = [rt_tot_time, rt_prod_time, rt_vs_time, float(total_today)] + [float(cat['decimal']) for cat in categories]
-        color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 6))
+        color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 8))[1:-1]
         plt.bar(labels, values, color=color_palette)
         # Add angle to the labels to see all labels entirely
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
+        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
         canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = canvas.get_tk_widget()
+        canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
 
-    def add_website_link(self, window: tk.Frame, text: str, url: str, side: str) -> None:
+    def add_website_link(self, window: ttk.Frame, text: str, url: str, side: str) -> None:
         """
         Add a label to access the RescueTime website for analytics
 
@@ -603,8 +608,8 @@ class RescueWakaTime():
         :param url: the link to be clicked
         :type url: str
         """
-        font= ('Aerial 12')
-        add_website_link(window, url, text, font, side, fg = self.color_palette[-1], bg= self.color_palette[0])
+        font = ('Aerial', '16', 'underline')
+        add_website_link(window, url, text, font, side, fg=self.fg_string, bg=self.bg_string)
 
     def add_analytics_plots(self) -> None:
         """
@@ -612,10 +617,10 @@ class RescueWakaTime():
         """
         response = requests.get(self.activity_call)
         data_activity = response.json()
-        with open("data_activity.pickle", "wb") as file:
-            pickle.dump(data_activity, file)
-        with open('data_activity.pickle', 'rb') as handle:
-            data_activity = pickle.load(handle)
+        # with open("data_activity.pickle", "wb") as file:
+        #     pickle.dump(data_activity, file)
+        # with open('data_activity.pickle', 'rb') as handle:
+        #     data_activity = pickle.load(handle)
 
         df = pd.DataFrame(data_activity['rows'],
                           columns = ['rank', 'time', 'people', 'activity',
@@ -626,12 +631,12 @@ class RescueWakaTime():
         self.add_wakatime_plot(df)
 
     def add_activity_plot(self, df: pd.DataFrame) -> None:
-        # response = requests.get(self.activity_call)
-        # data_activity = response.json()
+        response = requests.get(self.activity_call)
+        data_activity = response.json()
         # with open("data_activity.pickle", "wb") as file:
         #     pickle.dump(data_activity, file)
-        with open('data_activity.pickle', 'rb') as handle:
-            data_activity = pickle.load(handle)
+        # with open('data_activity.pickle', 'rb') as handle:
+        #     data_activity = pickle.load(handle)
 
         # print(data_activity)
         # # Make a vertical bar chart with the category and productivity score
@@ -648,8 +653,10 @@ class RescueWakaTime():
         # Add angle to the labels to see all labels entirely
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
+        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
         canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = canvas.get_tk_widget()
+        canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
 
     def add_ranked_plot(self, rank: pd.Series) -> None:
@@ -675,14 +682,16 @@ class RescueWakaTime():
 
         # Make the plot and add it to the GUI window
         fig, (self.ax) = plt.subplots(1, 1, figsize=(5,2))
-        plt.title("Productivity Rank (2 most productive, -2 most distracting))")
+        plt.title("Productivity (2 most productive, -2 most distracting))")
         plt.xlabel("Time (hours)")
         plt.barh(np.array(data_to_plot)[:,0],
                 np.array(data_to_plot)[:,1]/3600,
                 color=self.color_palette)
         plt.tight_layout()
+        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
         canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = canvas.get_tk_widget()
+        canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
 
     def add_categorical_plot(self, df: pd.DataFrame) -> None:
@@ -705,14 +714,28 @@ class RescueWakaTime():
 
         # Make the plot and add it to the GUI window
         fig, (self.ax) = plt.subplots(1, 1, figsize=(5,4))
+        labels = []
+        for key in top_ten.keys():
+            len_ = len(key)
+            if len_>18:
+                ind = key.find(' ', len_ // 2 - 1)
+                ind = ind if ind > 0 else key.rfind(' ')
+
+                str1 = key[:ind]
+                str2 = key[ind+1:]
+                labels.append(str1 + '\n' + str2)
+            else:
+                labels.append(key)
         plt.title("Categories")
         plt.ylabel("Time (hours)")
-        plt.bar(top_ten.keys(), top_ten.values/3600, color=plot_colors)
+        plt.bar(labels, top_ten.values/3600, color=plot_colors)
         # Add angle to the labels to see all labels entirely
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
+        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
         canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = canvas.get_tk_widget()
+        canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
 
     def add_start_rescue_time_button(self) -> None:
@@ -739,6 +762,7 @@ class RescueWakaTime():
 
         # Add the button to the GUI window
         text = "End RescueTime" if self.rescue_time_is_on else "Start RescueTime"
-        self.rescue_time_button = tk.Button(self.window, text = text,
-                                            command = start_rescue_time)
+        self.rescue_time_button = ttk.Button(self.window, text = text,
+                                            command = start_rescue_time,
+                                            style='my.TButton')
         self.rescue_time_button.pack(side = tk.TOP)

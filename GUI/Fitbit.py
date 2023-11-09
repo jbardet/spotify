@@ -51,6 +51,30 @@ class Fitbit:
                                     refresh_token=self.__refresh_token)
 
     def save_data(self):
+        # # join data from azm, sleep, activites with days
+        # with open('data/fitbit_activities.csv', 'r') as f:
+        #     activities_df_saved = pd.read_csv(f, index_col=0)
+        #     # activities_df_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+        #     # we need to remove the first line that has the same date as another line
+        #     activities_df_saved.drop_duplicates(subset=['date'], keep='last', inplace=True)
+        # with open('data/fitbit_azm.csv', 'r') as f:
+        #     azm_df_saved = pd.read_csv(f, index_col=0)
+        #     # azm_df_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+        #     azm_df_saved.drop_duplicates(subset=['date'], keep='last', inplace=True)
+        # with open('data/fitbit_sleep_daily.csv', 'r') as f:
+        #     sleep_daily_df_saved = pd.read_csv(f, index_col=0)
+        #     # sleep_daily_df_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+        #     sleep_daily_df_saved.drop_duplicates(subset=['date'], keep='last', inplace=True)
+        # with open('data/fitbit_day.csv', 'r') as f:
+        #     day_df_saved = pd.read_csv(f, index_col=0)
+        #     # day_df_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
+        #     day_df_saved.drop_duplicates(subset=['date'], keep='last', inplace=True)
+        # # let's concat all the dataframes by date
+        # day_df = pd.merge(day_df_saved, activities_df_saved, on='date', how='outer')
+        # day_df = pd.merge(day_df, azm_df_saved, on='date', how='outer')
+        # day_df = pd.merge(day_df_saved, sleep_daily_df_saved, on='date', how='outer')
+        # day_df.to_csv('data/fitbit_day.csv')
+
         try:
             with open('data/fitbit_intraday.csv', 'r') as f:
                 intraday_df_saved = pd.read_csv(f, index_col=0)
@@ -60,15 +84,9 @@ class Fitbit:
                 spo2_df_saved = pd.read_csv(f, index_col=0)
             with open('data/fitbit_hrv.csv', 'r') as f:
                 hrv_df_saved = pd.read_csv(f, index_col=0)
-            with open('data/fitbit_activities.csv', 'r') as f:
-                activities_df_saved = pd.read_csv(f, index_col=0)
-            with open('data/fitbit_sleep_daily.csv', 'r') as f:
-                sleep_daily_df_saved = pd.read_csv(f, index_col=0)
             with open('data/fitbit_sleep_intrad.csv', 'r') as f:
                 sleep_intrad_df_saved = pd.read_csv(f, index_col=0)
-            with open('data/fitbit_azm.csv', 'r') as f:
-                azm_df_saved = pd.read_csv(f, index_col=0)
-            last_save = day_df['date'].iloc[-1]
+            last_save = intraday_df_saved['date'].iloc[-1]
         except FileNotFoundError:
             last_save = "2023-10-30"
         today = str(datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -93,7 +111,7 @@ class Fitbit:
         spacing = 1 # minutes
         t = [str(i*datetime.timedelta(minutes=spacing)) for i in range(24*60//spacing)]
         t = ["0"+m if len(m)<8 else m for m in t]
-        # intraday is per day specific fso need to iterate trough the days
+        # intraday is per day specific so need to iterate trough the days
         intraday_dict = {
             'date': [],
             'time': [],
@@ -128,27 +146,8 @@ class Fitbit:
             'out_of_range_minutes': [],
             'fat_burn_minutes': [],
             'cardio_minutes': [],
-            'peak_minutes': []
-        }
-        spo2_dict = {
-            'date': [],
-            'value': []
-        }
-        hrv_dict = {
-            'date': [],
-            'rmssd': [],
-            'coverage': [],
-            'hf': [],
-            'lf': []
-        }
-        activities_dict = {
-            'date': [],
-            'activities': [],
-            # 'goals': [],
-            'summary': []
-        }
-        sleep_daily_dict = {
-            'date': [],
+            'peak_minutes': [],
+            # sleep
             'duration': [],
             'efficiency': [],
             'endTime': [],
@@ -179,13 +178,59 @@ class Fitbit:
             'awake_count': [],
             'awake_minutes': [],
             'restless_count': [],
-            'restless_minutes': []
+            'restless_minutes': [],
+            # activities
+            'activities': [],
+            'summary': [],
+            # azm (Active Zone Minutes)
+            'fatBurnActiveZoneMinutes': [],
+            'cardioActiveZoneMinutes': [],
+            'activeZoneMinutes': []
+        }
+        spo2_dict = {
+            'date': [],
+            'value': []
+        }
+        hrv_dict = {
+            'date': [],
+            'rmssd': [],
+            'coverage': [],
+            'hf': [],
+            'lf': []
         }
         sleep_intrad_dict = {
             'time': [],
             'level': [],
             'seconds': []
         }
+
+        intraday_df_saved_copy = intraday_df_saved.copy()
+        for i, row in intraday_df_saved.iterrows():
+            if datetime.datetime.strptime(row['date'], "%Y-%m-%d")>=datetime.datetime.strptime(last_save, "%Y-%m-%d"):
+                # remove the row
+                intraday_df_saved_copy.drop(i, inplace=True)
+        intraday_df_saved = intraday_df_saved_copy
+
+        day_df_saved_copy = day_df_saved.copy()
+        for i, row in day_df_saved.iterrows():
+            if datetime.datetime.strptime(row['date'], "%Y-%m-%d")>=datetime.datetime.strptime(last_save, "%Y-%m-%d"):
+                # remove the row
+                day_df_saved_copy.drop(i, inplace=True)
+        day_df_saved = day_df_saved_copy
+
+        spo2_df_saved_copy = spo2_df_saved.copy()
+        for i, row in spo2_df_saved.iterrows():
+            if datetime.datetime.strptime(row['date'], "%Y-%m-%dT%H:%M:%S").date()>=datetime.datetime.strptime(last_save, "%Y-%m-%d").date():
+                # remove the row
+                spo2_df_saved_copy.drop(i, inplace=True)
+        spo2_df_saved = spo2_df_saved_copy
+
+        hrv_df_saved_copy = hrv_df_saved.copy()
+        for i, row in hrv_df_saved.iterrows():
+            if datetime.datetime.strptime(row['date'], "%Y-%m-%dT%H:%M:%S.%f").date()>=datetime.datetime.strptime(last_save, "%Y-%m-%d").date():
+                # remove the row
+                hrv_df_saved_copy.drop(i, inplace=True)
+        hrv_df_saved = hrv_df_saved_copy
         # Warning: 150 requests per hour
         for i, date in enumerate(dates_list):
             steps_intrad = self.client.intraday_time_series('activities/steps', base_date=date)
@@ -212,8 +257,8 @@ class Fitbit:
             intraday_dict['heart'].extend(fill_dic(hr_intrad['activities-heart-intraday']['dataset'], t))
             if not all((i+1)*len(t) == len(d) for d in list(intraday_dict.values())):
                 print("no")
-            day_dict['date'].append(date)
             temp_ts = requests.get(f"https://api.fitbit.com/1/user/{self.__user_id}/temp/skin/date/{date}.json", headers = headers).json()
+            day_dict['date'].append(date)
             try:
                 day_dict['temp'].append(temp_ts['tempSkin'][0]['value']['nightlyRelative'])
                 if len(temp_ts['tempSkin'])>1:
@@ -267,88 +312,90 @@ class Fitbit:
                 day_dict['br_fullSleepSummary'].append(np.nan)
                 day_dict['br_lightSleepSummary'].append(np.nan)
             activities = self.client.activities(date = date)
-            activities_dict['date'].append(date)
-            activities_dict['activities'].append(activities['activities'])
+            day_dict['activities'].append(activities['activities'])
             # activities_dict['goals'].append(activities['goals'])
-            activities_dict['summary'].append(activities['summary'])
+            day_dict['summary'].append(activities['summary'])
             sleep = requests.get(f"https://api.fitbit.com/1.2/user/{self.__user_id}/sleep/date/{date}.json", headers = headers).json()
             # I don't think I can put sleep into the day dataframe as I might have multiple sleep a day (sieste)
             for sleep_session in sleep['sleep']:
-                sleep_daily_dict['date'].append(sleep_session['dateOfSleep'])
-                sleep_daily_dict['duration'].append(sleep_session['duration'])
-                sleep_daily_dict['efficiency'].append(sleep_session['efficiency'])
-                sleep_daily_dict['endTime'].append(sleep_session['endTime'])
-                sleep_daily_dict['infoCode'].append(sleep_session['infoCode'])
-                sleep_daily_dict['isMainSleep'].append(sleep_session['isMainSleep'])
-                sleep_daily_dict['minutesAfterWakeup'].append(sleep_session['minutesAfterWakeup'])
-                sleep_daily_dict['minutesAsleep'].append(sleep_session['minutesAsleep'])
-                sleep_daily_dict['minutesAwake'].append(sleep_session['minutesAwake'])
-                sleep_daily_dict['minutesToFallAsleep'].append(sleep_session['minutesToFallAsleep'])
-                sleep_daily_dict['startTime'].append(sleep_session['startTime'])
-                sleep_daily_dict['timeInBed'].append(sleep_session['timeInBed'])
-                sleep_daily_dict['type'].append(sleep_session['type'])
-                sleep_daily_dict['logType'].append(sleep_session['logType'])
+                day_dict['duration'].append(sleep_session['duration'])
+                day_dict['efficiency'].append(sleep_session['efficiency'])
+                day_dict['endTime'].append(sleep_session['endTime'])
+                day_dict['infoCode'].append(sleep_session['infoCode'])
+                day_dict['isMainSleep'].append(sleep_session['isMainSleep'])
+                day_dict['minutesAfterWakeup'].append(sleep_session['minutesAfterWakeup'])
+                day_dict['minutesAsleep'].append(sleep_session['minutesAsleep'])
+                day_dict['minutesAwake'].append(sleep_session['minutesAwake'])
+                day_dict['minutesToFallAsleep'].append(sleep_session['minutesToFallAsleep'])
+                day_dict['startTime'].append(sleep_session['startTime'])
+                day_dict['timeInBed'].append(sleep_session['timeInBed'])
+                day_dict['type'].append(sleep_session['type'])
+                day_dict['logType'].append(sleep_session['logType'])
                 sleep_intrad_dict['time'].extend([s['dateTime'] for s in sleep_session['levels']['data']])
                 sleep_intrad_dict['level'].extend([s['level'] for s in sleep_session['levels']['data']])
                 sleep_intrad_dict['seconds'].extend([s['seconds'] for s in sleep_session['levels']['data']])
                 try:
-                    sleep_daily_dict['deep_count'].append(sleep_session['levels']['summary']['deep']['count'])
-                    sleep_daily_dict['deep_minutes'].append(sleep_session['levels']['summary']['deep']['minutes'])
-                    sleep_daily_dict['deep_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['deep']['thirtyDayAvgMinutes'])
-                    sleep_daily_dict['light_count'].append(sleep_session['levels']['summary']['light']['count'])
-                    sleep_daily_dict['light_minutes'].append(sleep_session['levels']['summary']['light']['minutes'])
-                    sleep_daily_dict['light_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['light']['thirtyDayAvgMinutes'])
-                    sleep_daily_dict['rem_count'].append(sleep_session['levels']['summary']['rem']['count'])
-                    sleep_daily_dict['rem_minutes'].append(sleep_session['levels']['summary']['rem']['minutes'])
-                    sleep_daily_dict['rem_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['rem']['thirtyDayAvgMinutes'])
-                    sleep_daily_dict['wake_count'].append(sleep_session['levels']['summary']['wake']['count'])
-                    sleep_daily_dict['wake_minutes'].append(sleep_session['levels']['summary']['wake']['minutes'])
-                    sleep_daily_dict['wake_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['wake']['thirtyDayAvgMinutes'])
-                    sleep_daily_dict['asleep_count'].append(np.nan)
-                    sleep_daily_dict['asleep_minutes'].append(np.nan)
-                    sleep_daily_dict['awake_count'].append(np.nan)
-                    sleep_daily_dict['awake_minutes'].append(np.nan)
-                    sleep_daily_dict['restless_count'].append(np.nan)
-                    sleep_daily_dict['restless_minutes'].append(np.nan)
+                    day_dict['deep_count'].append(sleep_session['levels']['summary']['deep']['count'])
+                    day_dict['deep_minutes'].append(sleep_session['levels']['summary']['deep']['minutes'])
+                    day_dict['deep_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['deep']['thirtyDayAvgMinutes'])
+                    day_dict['light_count'].append(sleep_session['levels']['summary']['light']['count'])
+                    day_dict['light_minutes'].append(sleep_session['levels']['summary']['light']['minutes'])
+                    day_dict['light_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['light']['thirtyDayAvgMinutes'])
+                    day_dict['rem_count'].append(sleep_session['levels']['summary']['rem']['count'])
+                    day_dict['rem_minutes'].append(sleep_session['levels']['summary']['rem']['minutes'])
+                    day_dict['rem_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['rem']['thirtyDayAvgMinutes'])
+                    day_dict['wake_count'].append(sleep_session['levels']['summary']['wake']['count'])
+                    day_dict['wake_minutes'].append(sleep_session['levels']['summary']['wake']['minutes'])
+                    day_dict['wake_thirtyDayAvgMinutes'].append(sleep_session['levels']['summary']['wake']['thirtyDayAvgMinutes'])
+                    day_dict['asleep_count'].append(np.nan)
+                    day_dict['asleep_minutes'].append(np.nan)
+                    day_dict['awake_count'].append(np.nan)
+                    day_dict['awake_minutes'].append(np.nan)
+                    day_dict['restless_count'].append(np.nan)
+                    day_dict['restless_minutes'].append(np.nan)
                 except KeyError:
-                    sleep_daily_dict['deep_count'].append(np.nan)
-                    sleep_daily_dict['deep_minutes'].append(np.nan)
-                    sleep_daily_dict['deep_thirtyDayAvgMinutes'].append(np.nan)
-                    sleep_daily_dict['light_count'].append(np.nan)
-                    sleep_daily_dict['light_minutes'].append(np.nan)
-                    sleep_daily_dict['light_thirtyDayAvgMinutes'].append(np.nan)
-                    sleep_daily_dict['rem_count'].append(np.nan)
-                    sleep_daily_dict['rem_minutes'].append(np.nan)
-                    sleep_daily_dict['rem_thirtyDayAvgMinutes'].append(np.nan)
-                    sleep_daily_dict['wake_count'].append(np.nan)
-                    sleep_daily_dict['wake_minutes'].append(np.nan)
-                    sleep_daily_dict['wake_thirtyDayAvgMinutes'].append(np.nan)
-                    sleep_daily_dict['asleep_count'].append(sleep_session['levels']['summary']['asleep']['count'])
-                    sleep_daily_dict['asleep_minutes'].append(sleep_session['levels']['summary']['asleep']['minutes'])
-                    sleep_daily_dict['awake_count'].append(sleep_session['levels']['summary']['awake']['count'])
-                    sleep_daily_dict['awake_minutes'].append(sleep_session['levels']['summary']['awake']['minutes'])
-                    sleep_daily_dict['restless_count'].append(sleep_session['levels']['summary']['restless']['count'])
-                    sleep_daily_dict['restless_minutes'].append(sleep_session['levels']['summary']['restless']['minutes'])
+                    day_dict['deep_count'].append(np.nan)
+                    day_dict['deep_minutes'].append(np.nan)
+                    day_dict['deep_thirtyDayAvgMinutes'].append(np.nan)
+                    day_dict['light_count'].append(np.nan)
+                    day_dict['light_minutes'].append(np.nan)
+                    day_dict['light_thirtyDayAvgMinutes'].append(np.nan)
+                    day_dict['rem_count'].append(np.nan)
+                    day_dict['rem_minutes'].append(np.nan)
+                    day_dict['rem_thirtyDayAvgMinutes'].append(np.nan)
+                    day_dict['wake_count'].append(np.nan)
+                    day_dict['wake_minutes'].append(np.nan)
+                    day_dict['wake_thirtyDayAvgMinutes'].append(np.nan)
+                    day_dict['asleep_count'].append(sleep_session['levels']['summary']['asleep']['count'])
+                    day_dict['asleep_minutes'].append(sleep_session['levels']['summary']['asleep']['minutes'])
+                    day_dict['awake_count'].append(sleep_session['levels']['summary']['awake']['count'])
+                    day_dict['awake_minutes'].append(sleep_session['levels']['summary']['awake']['minutes'])
+                    day_dict['restless_count'].append(sleep_session['levels']['summary']['restless']['count'])
+                    day_dict['restless_minutes'].append(sleep_session['levels']['summary']['restless']['minutes'])
 
-        # Get Active Zone Minutes as as Time Series
-        azm_dict = {
-            'date': [],
-            'fatBurnActiveZoneMinutes': [],
-            'cardioActiveZoneMinutes': [],
-            'activeZoneMinutes': []
-        }
         azm_ts = self.client.time_series('activities/active-zone-minutes', period='1m')
-        for day_data in azm_ts['activities-active-zone-minutes']:
-            azm_dict['date'].append(day_data['dateTime'])
-            for key in day_data['value'].keys():
-                if key not in azm_dict:
-                    print("oe")
-            for key in azm_dict.keys():
-                if key =='date': continue
-                try:
-                    azm_dict[key].append(day_data['value'][key])
-                except KeyError:
-                    azm_dict[key].append(np.nan)
+        azm_keys = ['fatBurnActiveZoneMinutes','cardioActiveZoneMinutes','activeZoneMinutes']
+        j=0
+        for i in range(len(azm_ts['activities-active-zone-minutes'])):
+            found = False
+            while not found:
+                if day_dict['date'][j] > azm_ts['activities-active-zone-minutes'][i]['dateTime']:
+                    found = True
+                elif day_dict['date'][j] == azm_ts['activities-active-zone-minutes'][i]['dateTime']:
+                    for key in azm_keys:
+                        try:
+                            day_dict[key].append(azm_ts['activities-active-zone-minutes'][i]['value'][key])
+                        except KeyError:
+                            day_dict[key].append(np.nan)
+                    j+=1
+                    found = True
+                else:
+                    for key in azm_keys:
+                        day_dict[key].append(np.nan)
+                    j+=1
+        if len(day_dict['date'])>len(day_dict['fatBurnActiveZoneMinutes']):
+            for key in azm_keys:
+                day_dict[key].extend([np.nan for _ in range(len(day_dict['date'])-len(day_dict[key]))])
         # Same intraday (does not work but I think it is useless to have this precise)
         # azm_ts_intrad = self.client.intraday_time_series('activities/active-zone-minutes', base_date=date2)
 
@@ -356,36 +403,24 @@ class Fitbit:
         day_df_added = pd.DataFrame.from_dict(day_dict)
         spo2_df_added = pd.DataFrame.from_dict(spo2_dict)
         hrv_df_added = pd.DataFrame.from_dict(hrv_dict)
-        activities_df_added = pd.DataFrame.from_dict(activities_dict)
-        sleep_daily_df_added = pd.DataFrame.from_dict(sleep_daily_dict)
         sleep_intrad_df_added = pd.DataFrame.from_dict(sleep_intrad_dict)
-        azm_df_added = pd.DataFrame.from_dict(azm_dict)
         try:
             intraday_df = pd.concat([intraday_df_saved, intraday_df_added], ignore_index=True)
             day_df = pd.concat([day_df_saved, day_df_added], ignore_index=True)
             spo2_df = pd.concat([spo2_df_saved, spo2_df_added], ignore_index=True)
             hrv_df = pd.concat([hrv_df_saved, hrv_df_added], ignore_index=True)
-            activities_df = pd.concat([activities_df_saved, activities_df_added], ignore_index=True)
-            sleep_daily_df = pd.concat([sleep_daily_df_saved, sleep_daily_df_added], ignore_index=True)
             sleep_intrad_df = pd.concat([sleep_intrad_df_saved, sleep_intrad_df_added], ignore_index=True)
-            azm_df = pd.concat([azm_df_saved, azm_df_added], ignore_index=True)
         except UnboundLocalError:
             intraday_df = intraday_df_added
             day_df = day_df_added
             spo2_df = spo2_df_added
             hrv_df = hrv_df_added
-            activities_df = activities_df_added
-            sleep_daily_df = sleep_daily_df_added
             sleep_intrad_df = sleep_intrad_df_added
-            azm_df = azm_df_added
         intraday_df.to_csv('data/fitbit_intraday.csv')
         day_df.to_csv('data/fitbit_day.csv')
         spo2_df.to_csv('data/fitbit_spo2.csv')
         hrv_df.to_csv('data/fitbit_hrv.csv')
-        activities_df.to_csv('data/fitbit_activities.csv')
-        sleep_daily_df.to_csv('data/fitbit_sleep_daily.csv')
         sleep_intrad_df.to_csv('data/fitbit_sleep_intrad.csv')
-        azm_df.to_csv('data/fitbit_azm.csv')
 
         # # Get Activity Log List TODO: need to save data
         # # activities list -> useless

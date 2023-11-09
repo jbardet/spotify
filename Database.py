@@ -111,6 +111,14 @@ class Database:
         self.__insert_data(curr, conn, df)
         # return new_videos_df
 
+    def is_artist_in_db(self, id: str):
+        conn = self.__connect_to_db()
+        curr = conn.cursor()
+        command = ("SELECT EXISTS(SELECT 1 FROM artists WHERE id = %s);")
+        variables = (id,)
+        curr.execute(command, variables)
+        return curr.fetchall()[0][0]
+
     def is_track_in_db(self, id: str):
         conn = self.__connect_to_db()
         curr = conn.cursor()
