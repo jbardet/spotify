@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 import spotipy
 
 try:
@@ -15,28 +16,36 @@ except ImportError:
 
 
 class SpotifyPlayer():
-    def __init__(self, window: tk.Frame, spotify_cr: dict):
+    def __init__(self, window: tk.Frame, spotify_cr: dict, fg_string, bg_string):
         self.window = window
         self.playing = False
         self.__spotify_cr = spotify_cr
+        self.fg_string = fg_string
+        self.bg_string = bg_string
         self.client = APIClient([self.__spotify_cr['username']], [self.__spotify_cr['client_id']],
             [self.__spotify_cr['client_secret']])
 
-        previous_btn = tk.Button(self.window, text=' << ', bg='gray', font=("Arial", 13),
-                            command=self.client.previous)
-        previous_btn.pack(side=tk.LEFT)
+        previous_btn = ttk.Button(self.window, text=' << ',
+                                  command=self.client.previous, style='my.TButton')
+        previous_btn.pack(side=tk.LEFT, anchor='c', fill='both', expand=True)
 
-        play_btn = tk.Button(self.window, text=' |> ', bg='gray', font=("Arial", 13),
-                  command=self.client.play)
-        play_btn.pack(side=tk.LEFT)
+        play_btn = ttk.Button(self.window, text=' |> ',
+                              command=self.client.play, style='my.TButton')
+        play_btn.pack(side=tk.LEFT, anchor='c', fill='both', expand=True)
 
-        pause_btn = tk.Button(self.window, text=' || ', bg='gray', font=("Arial", 13),
-                            command=self.client.pause)
-        pause_btn.pack(side=tk.LEFT)
+        pause_btn = ttk.Button(self.window, text=' || ',
+                               command=self.client.pause, style='my.TButton')
+        pause_btn.pack(side=tk.LEFT, anchor='c', fill='both', expand=True)
 
-        next_btn = tk.Button(self.window, text=' >> ', bg='gray', font=("Arial", 13),
-                            command=self.client.next)
-        next_btn.pack(side=tk.LEFT)
+        next_btn = ttk.Button(self.window, text=' >> ',
+                              command=self.client.next, style='my.TButton')
+        next_btn.pack(side=tk.LEFT, anchor='c', fill='both', expand=True)
+
+    def play(self, event=None):
+        if self.playing:
+            self.client.pause()
+        else:
+            self.client.play()
 
 
 
