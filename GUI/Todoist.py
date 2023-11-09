@@ -153,23 +153,23 @@ class Todoist():
         :return: the list of tasks to do
         :rtype: List[Task]
         """
-        # # maybe need to use this: api.get_project(project_id="2203306141") with only work project id
-        # api = TodoistAPI(self.__key)
-        # today = datetime.datetime.now()
-        # after_tomorrow = f"{today.month}/{today.day+2}"
-        # try:
-        #     tasks = api.get_tasks(
-        #         filter = f"due before: {after_tomorrow} & #Work & /Work TODO")
-        # except Exception as error:
-        #     print(error)
+        # maybe need to use this: api.get_project(project_id="2203306141") with only work project id
+        api = TodoistAPI(self.__key)
+        today = datetime.datetime.now()
+        after_tomorrow = f"{today.month}/{today.day+2}"
+        try:
+            tasks = api.get_tasks(
+                filter = f"due before: {after_tomorrow} & #Work & /Work TODO")
+        except Exception as error:
+            print(error)
         # with open("tasks.pkl", "wb") as file:
         #     pickle.dump(tasks, file)
-        try:
-            with open("tasks.pkl", "rb") as file:
-                tasks = pickle.load(file)
-        except FileNotFoundError:
-            with open(os.path.join(sys.path[-1], "tasks.pkl"), "rb") as file:
-                tasks = pickle.load(file)
+        # try:
+        #     with open("tasks.pkl", "rb") as file:
+        #         tasks = pickle.load(file)
+        # except FileNotFoundError:
+        #     with open(os.path.join(sys.path[-1], "tasks.pkl"), "rb") as file:
+        #         tasks = pickle.load(file)
         return tasks
 
     def add_tasks(self) -> None:
@@ -236,20 +236,22 @@ class Todoist():
         colors = [_from_rgb(color) for color in self.color_palette]
         colors.reverse()
         self.task_colors = []
-        for _ in range(5):
-            for i, task in enumerate(self.tasks):
-                due_date = task.due.date.split("-")
-                due_date = datetime.date(eval(due_date[0]),
-                                        eval(due_date[1]),
-                                        eval(due_date[2]))
+        for i, task in enumerate(self.tasks):
+            due_date = task.due.date.split("-")
+            due_date = datetime.date(int(due_date[0]),
+                                    int(due_date[1]),
+                                    int(due_date[2]))
+            if (due_date-datetime.date.today()).days<0:
+                color = colors[4]
+            else:
                 color = colors[task.priority-1]
-                self.task_colors.append(color)
-                # self.tasks_listbox.insert(i,
-                #                           task.content+" due: "+str((due_date-datetime.date.today()).days+1))
-                self.tasks_listbox.insert('', i,
-                                        text=task.content+" due: "+str((due_date-datetime.date.today()).days+1),
-                                        tags=(color,))
-                # self.tasks_listbox.itemconfig(i, {'bg':color})
+            self.task_colors.append(color)
+            # self.tasks_listbox.insert(i,
+            #                           task.content+" due: "+str((due_date-datetime.date.today()).days+1))
+            self.tasks_listbox.insert('', i,
+                                    text=task.content+" due: "+str((due_date-datetime.date.today()).days+1),
+                                    tags=(color,))
+            # self.tasks_listbox.itemconfig(i, {'bg':color})
         for color in colors:
             self.tasks_listbox.tag_configure(color, background=color, font=('Aerial', 16), foreground = 'black')
         # bind the button to the function that changes the color of the selected
