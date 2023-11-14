@@ -16,7 +16,6 @@ import pickle
 import requests
 import threading
 import json
-from colour import Color
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
 import webbrowser
@@ -25,7 +24,7 @@ import os.path
 import requests
 import matplotlib.pyplot as plt
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google.oauth2.credentials import Credentials as cr
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -40,7 +39,6 @@ from ttkwidgets import CheckboxTreeview
 import pygsheets
 import pandas as pd
 import warnings
-from wordcloud import WordCloud
 from typing import Dict
 import tkinter.ttk as ttk
 import json
@@ -48,6 +46,7 @@ import math
 import threading
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import spotipy
+from Credentials.Credentials import Credentials
 
 def get_script_folder():
     # path of main .py or .exe when converted with pyinstaller
@@ -71,33 +70,21 @@ def get_data_folder():
 
 try:
     from GUI.app import App
+    from Analysis.Analyzer import Analyzer
 except ModuleNotFoundError:
     sys.path.append(os.path.dirname(get_script_folder()))
-    print(sys.path)
-    # try:
     from GUI.app import App
-    # except ModuleNotFoundError:
-    #     try:
-    #         from app import App
-    #     except ImportError:
-    #         # print(sys.path)
-    #         # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    #         # print(sys.path)
-    #         # print(get_script_folder())
-    #         # print(get_data_folder())
-    #         try:
-    #             from GUI.app import App
-    #         except ModuleNotFoundError:
-    #             try:
-    #                 from app import App
-    #             except ModuleNotFoundError:
-    #                 try:
-    #                     from .GUI.app import App
-    #                 except ImportError:
-    #                     from .app import App
 
-def main() -> None:
+def main(params) -> None:
+    Credentials.initialize()
     App()
+    # analyzer = Analyzer()
+    # analyzer.weekly_review()
+    # if len(params)==0:
+    #     App()
+    # else:
+    #     print("analyze")
+    #     Analyzer()
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

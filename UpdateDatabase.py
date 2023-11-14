@@ -14,12 +14,12 @@ from Database import Database
 
 class UpdateDatabase:
     def __init__(self, args: dict):
-        self.username = eval(args.username)
-        self.id = eval(args.id)
-        self.secret = eval(args.secret)
+        self.username = ['jamesbardet'] # eval(args.username)
+        self.id = ['4cbacd4796fe4ccd819bbf6315d5ea79'] # eval(args.id)
+        self.secret = ['662bcdc685324cddad9a77435955e515'] # eval(args.secret)
         self.client = APIClient(self.username, self.id, self.secret)
-        self.spotify_database = Database(username = args.database,
-                                         password = args.password,
+        self.spotify_database = Database(username = 'james', #args.database,
+                                         password = 'Kkatecalisti98', #args.password,
                                          data_base = "spotifydb")
         self.__BASEPATH = os.path.dirname(os.path.realpath(__file__))
         self.__DATAPATH = os.path.join(self.__BASEPATH, "MyData")
@@ -56,12 +56,13 @@ class UpdateDatabase:
 
         # self.test_kaggle()
 
-        # Get playlists songs WARNING, NEED TO CHECK DUPLICATE
+        # # Get playlists songs WARNING, NEED TO CHECK DUPLICATE
         # self.__get_playlists_songs()
+        # print("done")
         features = self.__check_if_song_is_in_db()
-        with open(os.path.join(self.__FEATURESPATH, "playlist_features_06_11.json"), 'w', encoding='UTF-8') as outfile:
+        with open(os.path.join(self.__FEATURESPATH, "playlist_features_08_11.json"), 'w', encoding='UTF-8') as outfile:
             json.dump(features, outfile)
-        with open(os.path.join(self.__FEATURESPATH, "playlist_features_06_11.json"), 'r', encoding='UTF-8') as f:
+        with open(os.path.join(self.__FEATURESPATH, "playlist_features_08_11.json"), 'r', encoding='UTF-8') as f:
             features = json.load(f)
         features_db = pd.DataFrame(features)
         features_db.drop_duplicates(subset='id', inplace=True)
@@ -92,13 +93,13 @@ class UpdateDatabase:
 
         # # Playlists
         # # # Load playlists json file and add it to the playlist table in the database
-        # # with open(os.path.join(self.__PLAYLISTSPATH, "playlists.json"), 'r', encoding='UTF-8') as f:
-        # #     playlists = json.load(f)[0]
-        # # for first_key, values in playlists.items():
-        # #     for second_key, value in values.items():
-        # #         # database with second_key, value, first_key
-        # #         # which would be Deep Focus, https.., Deep Concentration
-        # #         pass
+        # with open(os.path.join(self.__PLAYLISTSPATH, "playlists.json"), 'r', encoding='UTF-8') as f:
+        #     playlists = json.load(f)
+        # for first_key, values in playlists.items():
+        #     for second_key, value in values.items():
+        #         # database with second_key, value, first_key
+        #         # which would be Deep Focus, https.., Deep Concentration
+        #         pass
 
         # self.update_playlist_db()
         # # Load playlists json file and add it to the playlist table in the database
@@ -110,6 +111,7 @@ class UpdateDatabase:
         #     # track as ['album', 'artists', 'available_markets', 'disc_number', 'duration_ms', 'episode', 'explicit', 'external_ids', 'external_urls', 'href', 'id', 'is_local', 'name', 'popularity', 'preview_url', 'track', 'track_number', 'type', 'uri']
         #     # maybe add in db: id, name, description, followers['total'], images[0]['url'], tracks
         #     # where tracks is a list of [track_id, track_name, track_popularity, artists_id, artists_name, duration_ms, explicit]
+        pass
 
     # # spotify does not allow to have more recent history than 50 songs so won't use it here (would need to download data from link again)
     #     self.recent_history()
@@ -277,59 +279,61 @@ class UpdateDatabase:
         self.spotify_database.save_playlists_to_db(playlists_df)
 
     def __check_if_song_is_in_db(self):
-        # file = os.path.join(self.__PLAYLISTSPATH, "playlists_api.json")
-        # with open(file, 'r', encoding='UTF-8') as f:
-        #     playlists = json.load(f)
-        # # test = self.spotify_database.is_track_in_db("2sdVNVVsrEoExbXhiItNuz")
-        # # print(test)
-        # ids_done = {}
-        # features = []
-        # for playlist in playlists:
-        #     ids_to_do = []
-        #     i=0
-        #     for track in playlist['tracks']:
-        #         track_id = track['track']['id']
-        #         is_in_features = True if track_id in ids_done else False
-        #         is_in_db = self.spotify_database.is_track_in_db(track_id)
-        #         if not is_in_db and not is_in_features:
-        #             # if features:
-        #             i+=1
-        #             ids_done[track_id] = track['track']['name']
-        #             ids_to_do.append(track_id)
-        #             if i==10:
-        #                 try:
-        #                     features_to_do = self.get_single_track_features(ids_to_do)
-        #                     if features_to_do:
-        #                         features.extend(features_to_do)
-        #                     else:
-        #                         print("failed")
-        #                         import time
-        #                         time.sleep(60)
-        #                         self.client = APIClient(self.username, self.id, self.secret)
-        #                 except Exception as e:
-        #                     print(e)
-        #                 ids_to_do = []
-        #                 i=0
-        #             # break
-        #     # break
-        #     if len(ids_to_do)>0:
-        #         try:
-        #             features_to_do = self.get_single_track_features(ids_to_do)
-        #             if features_to_do:
-        #                 features.extend(features_to_do)
-        #         except Exception as e:
-        #             print(e)
-        # # features = self.get_single_track_features(['0fOzbcpxqSgX5KhLwfdGyi','433T7mnFe3pkrTZfnYtq7A'])
-        # with open(os.path.join(r"C:\Users\james\Documents\spotify\Features", "playlists_break06_11.json"), "w") as outfile:
+        file = os.path.join(self.__PLAYLISTSPATH, "playlists_api.json")
+        with open(file, 'r', encoding='UTF-8') as f:
+            playlists = json.load(f)
+        # test = self.spotify_database.is_track_in_db("2sdVNVVsrEoExbXhiItNuz")
+        # print(test)
+        ids_done = {}
+        features = []
+        for playlist in playlists:
+            ids_to_do = []
+            i=0
+            for track in playlist['tracks']:
+                try:
+                    track_id = track['track']['id']
+                except TypeError:
+                    continue
+                is_in_features = True if track_id in ids_done else False
+                is_in_db = self.spotify_database.is_track_in_db(track_id)
+                if not is_in_db and not is_in_features:
+                    # if features:
+                    i+=1
+                    ids_done[track_id] = track['track']['name']
+                    # ids_to_do.append(track_id)
+                    # if i==10:
+                    #     try:
+                    #         features_to_do = self.get_single_track_features(ids_to_do)
+                    #         if features_to_do:
+                    #             features.extend(features_to_do)
+                    #         else:
+                    #             print("failed")
+                    #             import time
+                    #             time.sleep(60)
+                    #             self.client = APIClient(self.username, self.id, self.secret)
+                    #     except Exception as e:
+                    #         print(e)
+                    #     ids_to_do = []
+                    #     i=0
+                    # break
+            # break
+            if len(ids_to_do)>0:
+                try:
+                    features_to_do = self.get_single_track_features(ids_to_do)
+                    if features_to_do:
+                        features.extend(features_to_do)
+                except Exception as e:
+                    print(e)
+        # with open(os.path.join(r"C:\Users\james\Documents\spotify\Features", "playlists_break08_11.json"), "w") as outfile:
         #     json.dump(features, outfile)
         all_features = {}
-        with open(r"C:\Users\james\Documents\spotify\Features\playlists_break06_11.json", 'r', encoding='UTF-8') as f:
+        with open(r"C:\Users\james\Documents\spotify\Features\playlists_break08_11.json", 'r', encoding='UTF-8') as f:
             features = json.load(f)
         import pickle
         # save pickle object with ids done
-        # fileObj = open(r"C:\Users\james\Documents\spotify\Features\ids_done.pkl", 'wb')
-        # pickle.dump(ids_done, fileObj)
-        # fileObj.close()
+        fileObj = open(r"C:\Users\james\Documents\spotify\Features\ids_done.pkl", 'wb')
+        pickle.dump(ids_done, fileObj)
+        fileObj.close()
         fileObj = open(r"C:\Users\james\Documents\spotify\Features\ids_done.pkl", 'rb')
         ids_done = pickle.load(fileObj)
         fileObj.close()
@@ -357,9 +361,16 @@ class UpdateDatabase:
         return with_features
 
     def __get_playlists_songs(self):
+        # not_found = ['37i9dQZF1DXdL58DnQ4ZqM', '37i9dQZF1DX3sZpm7aIEYp', '37i9dQZF1DXa28zjJKtGIV', '5oxHFqFU06ufRSZt8izJX6']
+        # for id in not_found:
+        #     try:
+        #         results, tracks = self.client.get_playlist(id)
+        #         print(results, tracks)
+        #     except Exception as e:
+        #         print(e)
         file = os.path.join(self.__PLAYLISTSPATH, "playlists.json")
         with open(file, 'r', encoding='UTF-8') as f:
-            playlists = json.load(f)[0]
+            playlists = json.load(f)
         hrefs = []
         for key, val in playlists.items():
             hrefs.extend(list(val.values()))
@@ -537,12 +548,13 @@ class UpdateDatabase:
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-u', '--username', help="spotify username", required=True)
-    parser.add_argument('-i', '--id', help="client id", required=True)
-    parser.add_argument('-s', '--secret', help="client secret", required=True)
-    parser.add_argument('-d', '--database', help="postgresql username", required=True)
-    parser.add_argument('-p', '--password', help="postgresql password", required=True)
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('-u', '--username', help="spotify username", required=True)
+    # parser.add_argument('-i', '--id', help="client id", required=True)
+    # parser.add_argument('-s', '--secret', help="client secret", required=True)
+    # parser.add_argument('-d', '--database', help="postgresql username", required=True)
+    # parser.add_argument('-p', '--password', help="postgresql password", required=True)
+    # args = parser.parse_args()
+    args = {}
 
     UpdateDatabase(args)

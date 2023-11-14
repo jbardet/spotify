@@ -23,7 +23,37 @@ class Database:
         command = ("SELECT tracks FROM playlists WHERE name = %s;")
         variables = (name,)
         curr.execute(command, variables)
-        return curr.fetchall()[0][0]
+        try:
+            return curr.fetchall()[0][0]
+        except IndexError:
+            try:
+                name = name.lower()
+                variables = (name,)
+                curr.execute(command, variables)
+                return curr.fetchall()[0][0]
+            except IndexError:
+                try:
+                    name = name.title()
+                    variables = (name,)
+                    curr.execute(command, variables)
+                    return curr.fetchall()[0][0]
+                except IndexError:
+                    raise
+
+    def get_playlist(self, name):
+        conn = self.__connect_to_db()
+        curr = conn.cursor()
+        variables = (name,)
+        command = ("SELECT * FROM playlists WHERE name = %s;")
+        curr.execute(command, variables)
+        return curr.fetchall()
+
+    def get_playlist_names(self):
+        conn = self.__connect_to_db()
+        curr = conn.cursor()
+        command = ("SELECT * FROM playlists")
+        curr.execute(command)
+        return curr.fetchall()
 
     def save_artists_to_db(self, df: pd.DataFrame):
         conn = self.__connect_to_db()

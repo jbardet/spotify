@@ -25,12 +25,15 @@ class APIClient:
         scope = 'playlist-modify playlist-modify-private user-read-recently-played user-library-read user-read-currently-playing user-read-playback-state user-modify-playback-state'
         tokens = []
         for i in range(self.__max_workers):
-            token = util.prompt_for_user_token(username=self.__usernames[i],
-                                            scope=scope,
-                                            client_id=self.__ids[i],
-                                            client_secret=self.__secrets[i],
-                                            redirect_uri=redirect_uri)
-            tokens.append(token)
+            try:
+                token = util.prompt_for_user_token(username=self.__usernames[i],
+                                                scope=scope,
+                                                client_id=self.__ids[i],
+                                                client_secret=self.__secrets[i],
+                                                redirect_uri=redirect_uri)
+                tokens.append(token)
+            except spotipy.oauth2.SpotifyOauthError:
+                tokens.append(None)
         return tokens
 
     def __getProxys(self) -> str:
@@ -87,6 +90,10 @@ class APIClient:
 
         # print(pl['id'], '\t', pl['name'], '\t', pl['tracks']['total'])
 
+    def play_playlist(self, pl):
+        sp = spotipy.Spotify(auth=self.__tokens[0])
+        self.start_playing_playlist(sp, pl)
+
     def start_playing_playlist(self, sp, pl):
         """
         Start playing a playlist via Spotipy
@@ -95,7 +102,11 @@ class APIClient:
         :type playlist_id: _type_
         """
         # webbrowser.open(pl['uri'])
-        sp.start_playback(context_uri=pl['uri'])
+        try:
+            playlist_id = pl['uri']
+        except (KeyError, TypeError):
+            playlist_id = 'spotify:playlist:'+pl
+        sp.start_playback(context_uri=playlist_id)
 
     def play(self):
         sp = spotipy.Spotify(auth=self.__tokens[0])
@@ -113,11 +124,21 @@ class APIClient:
 
     def next(self):
         sp = spotipy.Spotify(auth=self.__tokens[0])
-        sp.next_track()
+        try:
+            sp.next_track()
+        except spotipy.exceptions.SpotifyException:
+            pass
 
     def previous(self):
         sp = spotipy.Spotify(auth=self.__tokens[0])
-        sp.previous_track()
+        try:
+            sp.previous_track()
+        except spotipy.exceptions.SpotifyException:
+            pass
+
+    def get_current_track(self):
+        sp = spotipy.Spotify(auth=self.__tokens[0])
+        return sp.current_user_playing_track()
 
     def __call_api(self, params: List[Tuple], name: str = None, type: str = 'search'):
         headers = {

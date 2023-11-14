@@ -22,7 +22,6 @@ import pickle
 import requests
 import threading
 import json
-from colour import Color
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
 import webbrowser
@@ -39,13 +38,14 @@ from todoist_api_python.api import TodoistAPI
 from tkinter import ttk
 from ttkthemes import ThemedTk
 
-from .RescueWakaTime import RescueWakaTime
-from .Todoist import Todoist
-from .Timer import Timer
-from .Calendar import Calendar
-from .Radar import Radar
+from RescueWakaTime.RescueWakaTime import RescueWakaTime
+from Todoist.Todoist import Todoist
+from Timer.Timer import Timer
+from Spotify.Radar import Radar
+# from Calendar.Calendar import Calendar
 # from .Fitbit import Fitbit
 # from .LastFM import LastFM
+from Configs.Parser import Parser
 
 class App(tk.Tk):
     """
@@ -53,10 +53,11 @@ class App(tk.Tk):
     """
 
     def __init__(self):
+        Parser.initialize()
         self.launch()
 
     def launch(self):
-        self.window = ThemedTk(theme="equilux")
+        self.window = ThemedTk(theme=Parser.get_tk_theme())
         s = ttk.Style(self.window)
         s.configure('my.TButton', font=('Aerial', 18))
         s.configure('Treeview', rowheight=28)
@@ -66,25 +67,27 @@ class App(tk.Tk):
         bg_16bit = self.window.winfo_rgb(bg)
         self.bg_string = "#" + "".join([hex(bg_color >> 8)[2:] for bg_color in bg_16bit])
         fg = s.lookup("TFrame", "foreground")
-        fg_16bit = self.window.winfo_rgb(fg)
+        try:
+            fg_16bit = self.window.winfo_rgb(fg)
+        except tk._tkinter.TclError:
+            print("fail")
+            fg_16bit = self.window.winfo_rgb('#464646')
         self.fg_string = "#" + "".join([hex(fg_color >> 8)[2:] for fg_color in fg_16bit])
-
 
         # self.window = tk.Tk()
         self.window.title('Plotting in Tkinter')
         self.window.state('zoomed')   #zooms the screen to maxm whenever executed
         self.window.protocol("WM_DELETE_WINDOW", self.exit)
         # self.window.configure(background='')
-        color_theme = "plasma"
 
         today = datetime.datetime.today()
-        objective = 0
-        # if the day is a week-end, congratulate the user to put work on week-ends with a pop-up window
-        if today.weekday() == 5 or today.weekday() == 6:
-            messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
-            objective = 2
-        else:
-            objective = 7.5
+        objective = 2
+        # # if the day is a week-end, congratulate the user to put work on week-ends with a pop-up window
+        # if today.weekday() == 5 or today.weekday() == 6:
+        #     messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
+        #     objective = 2
+        # else:
+        #     objective = float(Parser.get_goal())
         # make 3 frames from the main window
         self.left_frame = ttk.Frame(self.window)
         self.left_frame.pack(side='left', anchor='c', fill='both', expand=True,
@@ -101,29 +104,6 @@ class App(tk.Tk):
         self.downright_frame = ttk.Frame(self.window)
         self.downright_frame.pack(side='bottom', anchor='c', fill='both', expand=True,
                                   padx=5, pady=(0,5))
-        try:
-            with open("credentials.json", "r") as file:
-                data = json.load(file)
-                fitbit_cr = data['fitbit']
-                rescue_cr = data['RescueTime']
-                waka_cr = data['WakaTime']
-                todoist_cr = data['Todoist']
-                calendar_cr = data['calendar']
-                db_cr = data['database']
-                spotify_cr = data['spotify']
-                lastfm_cr = data['lastfm']
-        except FileNotFoundError:
-            with open(os.path.join(sys.path[-1], "credentials.json"), "r") as file:
-                data = json.load(file)
-                fitbit_cr = data['fitbit']
-                rescue_cr = data['RescueTime']
-                waka_cr = data['WakaTime']
-                todoist_cr = data['Todoist']
-                calendar_cr = data['calendar']
-                db_cr = data['database']
-                spotify_cr = data['spotify']
-                lastfm_cr = data['lastfm']
-
 
         # self.radio_links = ["https://coderadio.freecodecamp.org/",
         #                     "https://musicforprogramming.net/latest/",
@@ -134,14 +114,18 @@ class App(tk.Tk):
         # font= ('Aerial 12')
         # side = "top"
         # add_website_link(self.window, url, text, font, side)
-        self.rw_time = RescueWakaTime(rescue_cr, waka_cr, self.left_frame, self.bg_string, self.fg_string, color_theme)
-        self.rw_time.add_analytics()
-        self.todoist = Todoist(todoist_cr, self.upright_frame, self.bg_string, self.fg_string, color_theme)
-        self.todoist.add_tasks()
-        self.timer = Timer(self.downright_frame, objective, self.bg_string, self.fg_string, color_theme)
-        self.window.bind('<Return>', self.timer.enter)
-        self.window.bind('<Escape>', self.timer.stop)
-        self.radar = Radar(spotify_cr, db_cr, self.middle_frame, self.bg_string, self.fg_string, color_theme)
+        # self.rw_time = RescueWakaTime()
+        # self.rw_time.build_frame(self.left_frame, self.bg_string, self.fg_string)
+        # self.rw_time.add_analytics()
+        # self.todoist = Todoist()
+        # self.todoist.build_frame(self.upright_frame, self.bg_string, self.fg_string)
+        # self.todoist.add_tasks()
+        # self.timer = Timer()
+        # self.timer.build_frame(self.downright_frame, objective, self.bg_string, self.fg_string)
+        # self.window.bind('<Return>', self.timer.enter)
+        # self.window.bind('<Escape>', self.timer.stop)
+        self.radar = Radar()
+        self.radar.build_frame(self.middle_frame, self.bg_string, self.fg_string)
         # self.window.bind('<space>', self.radar.spotify_player.play)
         self.radar.plot_radar()
         # # # self.google_calendar(calendar_cr)
@@ -164,35 +148,7 @@ class App(tk.Tk):
         # # weekly_button.pack(side=ttk.TOP)
         # # self.weekly_review()
 
-        self.window.mainloop()
-
-    def weekly_review(self):
-        with open("credentials.json", "r") as file:
-            data = json.load(file)
-            fitbit_cr = data['fitbit']
-            rescue_cr = data['RescueTime']
-            waka_cr = data['WakaTime']
-            todoist_cr = data['Todoist']
-            calendar_cr = data['calendar']
-            db_cr = data['database']
-            spotify_cr = data['spotify']
-            lastfm_cr = data['lastfm']
-        with open('saves.txt', 'r') as file:
-            last_save = file.read()
-        # self.rw_time = RescueWakaTime(rescue_cr, waka_cr, self.left_frame)
-        # self.rw_time.save_data()
-        self.todoist = Todoist(todoist_cr, self.upright_frame)
-        self.todoist.save_data(last_save)
-        # self.radar = Radar(spotify_cr, db_cr, self.middle_frame)
-        # self.radar.save_data()
-        # self.fitbit = Fitbit(fitbit_cr)
-        # self.fitbit.save_data()
-        # self.lastfm = LastFM(lastfm_cr)
-        # self.lastfm.save_data()
-        self.generate_weekly_report()
-
-    def generate_weekly_report(self):
-        pass
+        # self.window.mainloop()
 
     def exit(self):
         self.timer.stop()

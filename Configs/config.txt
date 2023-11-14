@@ -1,0 +1,10 @@
+[GUI]
+tk_theme = equilux
+plt_theme = plasma
+
+[Timer]
+goal = 7.5
+
+[Drive]
+timer_data_file = timer_data_test.csv
+offline_data_file = offline_work_test.csv
