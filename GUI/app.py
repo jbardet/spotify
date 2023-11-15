@@ -114,16 +114,16 @@ class App(tk.Tk):
         # font= ('Aerial 12')
         # side = "top"
         # add_website_link(self.window, url, text, font, side)
-        # self.rw_time = RescueWakaTime()
-        # self.rw_time.build_frame(self.left_frame, self.bg_string, self.fg_string)
-        # self.rw_time.add_analytics()
-        # self.todoist = Todoist()
-        # self.todoist.build_frame(self.upright_frame, self.bg_string, self.fg_string)
-        # self.todoist.add_tasks()
-        # self.timer = Timer()
-        # self.timer.build_frame(self.downright_frame, objective, self.bg_string, self.fg_string)
-        # self.window.bind('<Return>', self.timer.enter)
-        # self.window.bind('<Escape>', self.timer.stop)
+        self.rw_time = RescueWakaTime()
+        self.rw_time.build_frame(self.left_frame, self.bg_string, self.fg_string)
+        self.rw_time.add_analytics()
+        self.todoist = Todoist()
+        self.todoist.build_frame(self.upright_frame, self.bg_string, self.fg_string)
+        self.todoist.add_tasks()
+        self.timer = Timer(self.update)
+        self.timer.build_frame(self.downright_frame, objective, self.bg_string, self.fg_string)
+        self.window.bind('<Return>', self.timer.enter)
+        self.window.bind('<Escape>', self.timer.stop)
         self.radar = Radar()
         self.radar.build_frame(self.middle_frame, self.bg_string, self.fg_string)
         # self.window.bind('<space>', self.radar.spotify_player.play)
@@ -150,7 +150,11 @@ class App(tk.Tk):
 
         # self.window.mainloop()
 
+    def update(self):
+        self.rw_time.update_analytics()
+
     def exit(self):
         self.timer.stop()
         self.timer.save_data()
+        self.radar.spotify_player.save_data()
         self.window.destroy()

@@ -18,6 +18,7 @@ class APIClient:
         self.__max_workers = len(self.__usernames)  # Number of parallel requests
         self.__tokens = self.__getToken()
         self.__ips = self.__getProxys()
+        self.sp = spotipy.Spotify(auth=self.__tokens[0])
 
     def __getToken(self) -> str:
 
@@ -73,28 +74,26 @@ class APIClient:
         :param name: _description_
         :type name: _type_
         """
-        sp = spotipy.Spotify(auth=self.__tokens[0])
-        sp.user_playlist_create(user=self.__usernames[0], name=name)
-        playlists = sp.user_playlists(self.__usernames[0])
+        self.sp.user_playlist_create(user=self.__usernames[0], name=name)
+        playlists = self.sp.user_playlists(self.__usernames[0])
 
         pl = list(playlists['items'])[0]
 
         # print(pl['id'], '\t', pl['name'], '\t', pl['tracks']['total'])
 
-        sp.user_playlist_add_tracks(self.__usernames[0], pl['id'], tracks = songs)
+        self.sp.user_playlist_add_tracks(self.__usernames[0], pl['id'], tracks = songs)
 
-        self.start_playing_playlist(sp, pl)
+        self.start_playing_playlist(self.sp, pl)
 
         time.sleep(5)
-        sp.current_user_unfollow_playlist(pl['id'])
+        self.sp.current_user_unfollow_playlist(pl['id'])
 
         # print(pl['id'], '\t', pl['name'], '\t', pl['tracks']['total'])
 
     def play_playlist(self, pl):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
-        self.start_playing_playlist(sp, pl)
+        self.start_playing_playlist(pl)
 
-    def start_playing_playlist(self, sp, pl):
+    def start_playing_playlist(self, pl):
         """
         Start playing a playlist via Spotipy
 
@@ -106,39 +105,40 @@ class APIClient:
             playlist_id = pl['uri']
         except (KeyError, TypeError):
             playlist_id = 'spotify:playlist:'+pl
-        sp.start_playback(context_uri=playlist_id)
+        self.sp.start_playback(context_uri=playlist_id)
 
     def play(self):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
         try:
-            sp.start_playback()
+            self.sp.start_playback()
         except spotipy.exceptions.SpotifyException:
-            pass
+            raise
 
     def pause(self):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
         try:
-            sp.pause_playback()
+            self.sp.pause_playback()
         except spotipy.exceptions.SpotifyException:
-            pass
+            raise
 
     def next(self):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
         try:
-            sp.next_track()
+            self.sp.next_track()
         except spotipy.exceptions.SpotifyException:
-            pass
+            raise
 
     def previous(self):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
         try:
-            sp.previous_track()
+            self.sp.previous_track()
         except spotipy.exceptions.SpotifyException:
-            pass
+            raise
+
+    def shuffle(self):
+        try:
+            self.sp.shuffle(state=True)
+        except spotipy.exceptions.SpotifyException:
+            raise
 
     def get_current_track(self):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
-        return sp.current_user_playing_track()
+        return self.sp.current_user_playing_track()
 
     def __call_api(self, params: List[Tuple], name: str = None, type: str = 'search'):
         headers = {
@@ -186,9 +186,8 @@ class APIClient:
         return feature['id']
 
     def get_related_artists(self, artist_id: str) -> dict:
-        sp = spotipy.Spotify(auth=self.__tokens[0])
         try:
-            features = sp.artist_related_artists(artist_id)
+            features = self.sp.artist_related_artists(artist_id)
             return features['artists']
         except spotipy.exceptions.SpotifyException:
             raise
@@ -197,13 +196,12 @@ class APIClient:
             # return None
 
     def get_playlist(self, playlist_href: str):
-        sp = spotipy.Spotify(auth=self.__tokens[0])
-        results = sp.playlist(playlist_href)
+        results = self.sp.playlist(playlist_href)
         del results['tracks']
-        tracks_response = sp.playlist_tracks(playlist_href)
+        tracks_response = self.sp.playlist_tracks(playlist_href)
         tracks = tracks_response["items"]
         while tracks_response["next"]:
-            tracks_response = sp.next(tracks_response)
+            tracks_response = self.sp.next(tracks_response)
             tracks.extend(tracks_response["items"])
 
         return results, tracks

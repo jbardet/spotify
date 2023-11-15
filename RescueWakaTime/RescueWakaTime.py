@@ -54,15 +54,28 @@ class RescueWakaTime():
             self.rank_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=rank&restrict_kind=productivity&interval=hour&restrict_begin={self.today}&restrict_end={self.today}&format=json"
             self.category_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=rank&restrict_kind=document&interval=hour&restrict_begin={self.today}&restrict_end={self.today}&format=json"
             self.activity_call = f"https://www.rescuetime.com/anapi/data?key={self.__rescue_key}&perspective=rank&restrict_kind=activity&interval=hour&restrict_begin={self.today}&restrict_end={self.today}&format=json"
-
-            response = requests.get(self.activity_call)
-            self.data_activity = response.json()
+            self.data_activity = self.get_data_activity()
 
         if len(self.__waka_key) == 0:
             print("Warning, WakaTime credentials not found, will skip it")
         else:
-            status_call = "https://wakatime.com/api/v1/users/current/status_bar/today?api_key="+self.__waka_key
-            self.status_bar = requests.get(status_call).json()
+            self.status_call = "https://wakatime.com/api/v1/users/current/status_bar/today?api_key="+self.__waka_key
+            self.status_bar = self.get_status_bar()
+
+    def get_status_bar(self):
+        response = requests.get(self.status_call)
+        return response.json()
+
+    def get_data_activity(self):
+        response = requests.get(self.activity_call)
+        return response.json()
+
+    def update_analytics(self):
+        self.data_activity = self.get_data_activity()
+        self.status_bar = self.get_status_bar()
+        for widget in self.window.winfo_children():
+            widget.destroy()
+        self.add_analytics()
 
     def build_frame(self, window: ttk.Frame, bg_string: str, fg_string: str):
         self.window = window

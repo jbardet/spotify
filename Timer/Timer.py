@@ -29,7 +29,7 @@ class Timer():
     Class to handle the POMODORO timer but also the links to the stretching
     websites
     """
-    def __init__(self) -> None:
+    def __init__(self, callback) -> None:
         """
         Initialize the frame with the timer and the links
 
@@ -38,6 +38,7 @@ class Timer():
         """
         self.timer_data_file = Parser.get_timer_data_file()
         self.offline_data_file = Parser.get_offline_work_file()
+        self.callback = callback
 
     def build_frame(self, window: ttk.Frame, objective: float, bg_string: str, fg_string: str):
         self.window = window
@@ -153,6 +154,7 @@ class Timer():
                 del self.submit_thread
                 total_time = self.compute_time()
                 self.add_radial_plot(total_time)
+                self.callback()
 
             # after every one sec the value of temp will be decremented
             # by one
@@ -190,6 +192,7 @@ class Timer():
             pass
         total_time = self.compute_time()
         self.add_radial_plot(total_time)
+        self.callback()
 
     def reset(self):
         self.hour.set("00")

@@ -14,12 +14,16 @@ import math
 from .DraggablePoint import DraggablePoint
 from Helpers.helpers import add_website_link, set_plot_color, _from_rgb, round_point_00_2
 from .SpotifyPlayer import SpotifyPlayer
+from .Monitor import Monitor
 import threading
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from Credentials.Credentials import Credentials
 from Configs.Parser import Parser
 import matplotlib.animation as animation
 import multiprocessing
+import time
+import random
+import sched, time
 
 try:
     from ..Database import Database
@@ -34,7 +38,31 @@ except ImportError:
     from Client import APIClient
 
 # plt.switch_backend('agg')
+# try multiprocessing: https://stackoverflow.com/questions/75064053/real-time-matplotlib-plotting-within-tkinter-class-object-fed-by-multiprocess-mo
 
+# def updateplot(q, playing, adjusted_values, angles, ax, canvas, color, i):
+#     # try:       #Try to check if there is data in the queue
+#     # result=q.get_nowait()
+
+#     # if result !='Q':
+#         #here get crazy with the plotting, you have access to all the global variables that you defined in the plot function, and have the data that the simulation sent.
+#     playing[0].remove()
+#     if i==0:
+#         # print("pair")
+#         animated_values = [max(0, val -0.5) for val in adjusted_values]
+#         playing = ax.fill(angles, animated_values, color=color, alpha=0.5)
+#         i+=1
+#     else:
+#         # print("impair")
+#         playing = ax.fill(angles, adjusted_values, color=color, alpha=0.5)
+#         i-=1
+#     canvas.draw()
+#     # window.after(5, updateplot, q)
+#     # else:
+#     #     print('done')
+#     # except:
+#     #     print("empty")
+#     #     self.window.after(500, updateplot, q)
 
 class Radar():
     """
@@ -121,7 +149,16 @@ class Radar():
         # let's make a spotify player to play songs
         spotify_player_frame = ttk.Frame(self.window)
         spotify_player_frame.pack(side='bottom', anchor='c', fill='both', expand=True)
-        self.spotify_player = SpotifyPlayer(spotify_player_frame, self.__spotify_cr, self.fg_string, self.bg_string)
+        self.spotify_player = SpotifyPlayer(spotify_player_frame, self.update_monitor, self.__spotify_cr, self.fg_string, self.bg_string)
+
+    def update_monitor(self, action: str):
+        # self.monitor.
+        if action == "pause":
+            # remove the plot
+            self.playing[0].remove()
+        else:
+            # self.change_value()
+            self.change_song()
 
     # def analyze_artists(self) -> None:
     #     """
@@ -208,6 +245,7 @@ class Radar():
             if playlist_name != "ALL":
                 playlist_names = [playlist_name]
             self.play_playlist(playlist_names)
+            self.change_song()
 
         b = ttk.Button(playlist_frame, text='Show playlist', command = print_value,
                        style='my.TButton')
@@ -344,6 +382,7 @@ class Radar():
         """
         self.violins[i][0].set_alpha(0)
         self.violins[i][1].set_alpha(0)
+        self.canvas.draw()
         # self.violin_pos.remove()
         # self.violin_neg.remove()
         # self.violin_pos.set_visible(False)
@@ -386,25 +425,15 @@ class Radar():
         plt.autoscale(enable=False)
         fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
 
-        # if something is playing, aso show on the graph
-        if self.currently_playing:
-            values = self.db.retrieve_feature(self.currently_playing['item']['id'])
-            adjusted_values = []
-            for i, name in enumerate(self.cols):
-                index = self.columns.index(name)
-                if name == "tempo":
-                    # tempo is in beat/minute, we want to convert it to milliseconds
-                    self.tempo = round(8/(values[0][11]/(60*1000)))
-                value = (values[0][index]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
-                adjusted_values.append(value)
-            adjusted_values += adjusted_values[:1]
-            print(adjusted_values)
-            self.playing = self.ax.fill(self.angles, adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.2)
-
         self.canvas = FigureCanvasTkAgg(fig, master = self.window)
         canvas_widget = self.canvas.get_tk_widget()
         self.canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
+
+        # if something is playing, aso show on the graph
+        if self.currently_playing:
+        # def plot():
+            self.update_plot()
 
         points = self.create_draggable_points(self.canvas)
         self.area = self.ax.fill(self.angles, self.values, color=_from_rgb(self.color_palette[0]), alpha=0.7)
@@ -415,43 +444,116 @@ class Radar():
                                  style='my.TButton')
         self.button.pack(side = tk.BOTTOM)
 
-        def anim(q):
-            def update(i):
-                self.playing[0].remove()
-                if i%2==0:
-                    print("pair")
-                    animated_values = [max(0, val -0.5) for val in adjusted_values]
-                    self.playing = self.ax.fill(self.angles, animated_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
-                    self.canvas.draw()
-                else:
-                    print("impair")
-                    self.playing = self.ax.fill(self.angles, adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
-                    self.canvas.draw()
-                return self.playing
-            print("anim")
-            print(fig, update, self.tempo)
-            ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=self.tempo, blit=False)
-            print(ani, fig, update, self.tempo)
-            return ani
-
+        # def anim(q):
+        #     def update(i):
+        #         self.playing[0].remove()
+        #         if i%2==0:
+        #             print("pair")
+        #             animated_values = [max(0, val -0.5) for val in adjusted_values]
+        #             self.playing = self.ax.fill(self.angles, animated_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
+        #             self.canvas.draw()
+        #         else:
+        #             print("impair")
+        #             self.playing = self.ax.fill(self.angles, adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
+        #             self.canvas.draw()
+        #         return self.playing
+        #     print("anim")
+        #     print(fig, update, self.tempo)
+        #     ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=self.tempo, blit=False)
+        #     print(ani, fig, update, self.tempo)
+        #     return ani
+        # print("anim")
+        # def update():
+        #     # print("update")
+        #     self.playing[0].remove()
+        #     if self.i==0:
+        #         # print("pair")
+        #         animated_values = [max(0, val -0.5) for val in self.adjusted_values]
+        #         self.playing = self.ax.fill(self.angles, animated_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
+        #         self.canvas.draw()
+        #         self.i+=1
+        #     else:
+        #         # print("impair")
+        #         self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
+        #         self.canvas.draw()
+        #         self.i-=1
+            # ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=1, blit=False)
+            # self.window.update()
         # if self.currently_playing:
         #     self.event = threading.Event()
         #     self.anim_thread = threading.Thread(target=anim, args=(self.event,))
         #     self.anim_thread.daemon = True
         #     self.anim_thread.start()
         #     # ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=1, blit=False)
-        def threading_():
-            # t1=threading.Thread(target=anim)
-            # t1.start()
-            q = multiprocessing.Queue()
-            p = multiprocessing.Process(None, anim, args=(q,))
-            p.start()
-        self.button = ttk.Button(self.window, text = "Animate",
-                                 command = threading_,
-                                 style='my.TButton')
-        self.button.pack(side = tk.BOTTOM)
+        # def threading_():
+        #     # t1=threading.Thread(target=anim)
+        #     # t1.start()
+        #     color = _from_rgb(self.color_palette[2])
+        #     q = multiprocessing.Queue()
+        #     p = multiprocessing.Process(target=updateplot, args=(q, self.playing, self.adjusted_values, self.angles, self.ax, self.canvas, color, self.i,))
+        #     p.start()
+        #     # plot()
+        #     # updateplot(q)
+        # self.button = ttk.Button(self.window, text = "Animate",
+        #                          command = update,
+        #                          style='my.TButton')
+        # self.button.pack(side = tk.BOTTOM)
+        if self.currently_playing:
+            self.event = threading.Event()
+            self.submit_thread = threading.Thread(target=self.show_song, args=(self.event,))
+            self.submit_thread.daemon = True
+            self.submit_thread.start()
 
         self.window.mainloop()
+
+    def change_song(self):
+        print("change the song")
+        time.sleep(2)
+        self.currently_playing = self.client.get_current_track()
+        print(self.currently_playing['item']['name'])
+        self.monitor.new_song(round(self.currently_playing['item']['duration_ms']/1000))
+        # scheduler.enter(round(self.currently_playing['item']['duration_ms']/1000), 1, change_song, (scheduler,))
+        self.update_plot()
+        # self.monitor.schedule.run()
+
+    def show_song(self, event):
+        self.time_rest = round((self.currently_playing['item']['duration_ms']-self.currently_playing['progress_ms'])/1000)
+        print(self.time_rest)
+        self.monitor = Monitor(self.time_rest, self.change_song)
+        self.monitor.schedule.run()
+        # my_scheduler = sched.scheduler(time.time, time.sleep)
+        # my_scheduler.enter(self.time_rest-16, 1, change_song, (my_scheduler,))
+        # my_scheduler.run()
+
+    def update_plot(self):
+        print("udpate plot")
+        try:
+            self.playing[0].remove()
+        except AttributeError:
+            pass
+        except ValueError:
+            # not drawn yet
+            print("why")
+        try:
+            values = self.db.retrieve_feature(self.currently_playing['item']['id'])
+            # print(values)
+        except TypeError:
+            self.currently_playing = self.client.get_current_track()
+            values = self.db.retrieve_feature(self.currently_playing['item']['id'])
+        if len(values)==0:
+            print("Cannot get features, will use default song")
+            values = self.db.retrieve_feature('0SRcyZIkogPq55QhbdBwzI')
+        self.adjusted_values = []
+        for i, name in enumerate(self.cols):
+            index = self.columns.index(name)
+            # if name == "tempo":
+            #     # tempo is in beat/minute, we want to convert it to milliseconds
+            #     self.tempo = round(1/(values[0][11]/(60*1000)))
+            value = (values[0][index]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+            self.adjusted_values.append(value)
+        self.adjusted_values += self.adjusted_values[:1]
+        self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.2)
+        self.canvas.draw()
 
     def convert_to_polar(self, x: float, y: float) -> Tuple[float, float]:
         """
@@ -594,3 +696,13 @@ class TableDropDown(ttk.Combobox):
         self.current(0) # index of values for current table
         self.pack(side="left") # place drop down box
         # print(self.current_table.get())
+
+# def simulation(q):
+#     print("simulation")
+#     iterations = range(100)
+#     for i in iterations:
+#         if not i % 10:
+#             time.sleep(1)
+#                 #here send any data you want to send to the other process, can be any pickable object
+#             q.put(random.randint(1,10))
+#     q.put('Q')
