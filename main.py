@@ -46,7 +46,11 @@ import math
 import threading
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import spotipy
-from Credentials.Credentials import Credentials
+import matplotlib.animation as animation
+import multiprocessing
+import time
+import random
+import sched, time
 
 def get_script_folder():
     # path of main .py or .exe when converted with pyinstaller
@@ -70,10 +74,12 @@ def get_data_folder():
 
 try:
     from GUI.app import App
+    from Credentials.Credentials import Credentials
     from Analysis.Analyzer import Analyzer
 except ModuleNotFoundError:
     sys.path.append(os.path.dirname(get_script_folder()))
     from GUI.app import App
+    from Credentials.Credentials import Credentials
 
 def main(params) -> None:
     Credentials.initialize()
