@@ -511,15 +511,20 @@ class Radar():
         time.sleep(2)
         self.currently_playing = self.client.get_current_track()
         print(self.currently_playing['item']['name'])
-        self.monitor.new_song(round(self.currently_playing['item']['duration_ms']/1000))
+        time_rest = round(self.currently_playing['item']['duration_ms']/1000)
+        try:
+            self.monitor.new_song(time_rest)
+        except AttributeError:
+            self.monitor = Monitor(time_rest, self.change_song)
+            self.monitor.new_song(time_rest)
         # scheduler.enter(round(self.currently_playing['item']['duration_ms']/1000), 1, change_song, (scheduler,))
         self.update_plot()
         # self.monitor.schedule.run()
 
     def show_song(self, event):
-        self.time_rest = round((self.currently_playing['item']['duration_ms']-self.currently_playing['progress_ms'])/1000)
-        print(self.time_rest)
-        self.monitor = Monitor(self.time_rest, self.change_song)
+        time_rest = round((self.currently_playing['item']['duration_ms']-self.currently_playing['progress_ms'])/1000)
+        print(time_rest)
+        self.monitor = Monitor(time_rest, self.change_song)
         self.monitor.schedule.run()
         # my_scheduler = sched.scheduler(time.time, time.sleep)
         # my_scheduler.enter(self.time_rest-16, 1, change_song, (my_scheduler,))

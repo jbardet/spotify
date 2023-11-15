@@ -81,13 +81,13 @@ class App(tk.Tk):
         # self.window.configure(background='')
 
         today = datetime.datetime.today()
-        objective = 2
-        # # if the day is a week-end, congratulate the user to put work on week-ends with a pop-up window
-        # if today.weekday() == 5 or today.weekday() == 6:
-        #     messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
-        #     objective = 2
-        # else:
-        #     objective = float(Parser.get_goal())
+        # objective = 2
+        # if the day is a week-end, congratulate the user to put work on week-ends with a pop-up window
+        if today.weekday() == 5 or today.weekday() == 6:
+            messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
+            objective = 4
+        else:
+            objective = float(Parser.get_goal())
         # make 3 frames from the main window
         self.left_frame = ttk.Frame(self.window)
         self.left_frame.pack(side='left', anchor='c', fill='both', expand=True,

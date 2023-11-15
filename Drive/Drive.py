@@ -11,7 +11,7 @@ class Drive():
         try:
             self.gc = pygsheets.authorize(service_file='Credentials/spotify-402405-59d8f4e06e41.json')
         except FileNotFoundError:
-            gc = pygsheets.authorize(service_file=os.path.join(sys.path[-1],
+            self.gc = pygsheets.authorize(service_file=os.path.join(sys.path[-1],
                                                                'Credentials/spotify-402405-59d8f4e06e41.json'))
 
     def save_data(self, name, dic):

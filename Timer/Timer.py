@@ -485,7 +485,7 @@ class Timer():
                                 colors=[self.colormap[-1], self.colormap[0]],
                                 startangle = 90,
                                 counterclock = False)
-            plt.setp( outer_ring, width=ring_width, edgecolor=outer_edge_color)
+            plt.setp(outer_ring, width=ring_width, edgecolor=outer_edge_color)
         except ValueError:
             pass
         try:
