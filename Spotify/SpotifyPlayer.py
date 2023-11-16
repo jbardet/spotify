@@ -23,6 +23,7 @@ class SpotifyPlayer():
     """
     SpotifyPlayer widget to play songs, pause, ...
     """
+
     def __init__(self,
                  window: tk.Frame,
                  callback: Callable,
@@ -54,15 +55,19 @@ class SpotifyPlayer():
                                 [self.__spotify_cr['client_secret']])
         self.liked_songs = {'name': [], 'id': [], 'time': [], 'like': []}
         self.currently_playing = self.client.get_current_track()
+        # self.track_name = self.currently_playing['item']['name']
+
         self.button_width = 6
+        # we listen in shuffle mode:
+        self.client.shuffle()
 
         unlike_btn = ttk.Button(self.window, text='-', width=self.button_width,
                                   command=self.unlike, style='my.TButton')
         unlike_btn.pack(side=tk.LEFT, anchor='c', fill='y', expand=True)
 
-        shuffle_btn = ttk.Button(self.window, text='~', width=self.button_width,
-                                  command=self.shuffle, style='my.TButton')
-        shuffle_btn.pack(side=tk.LEFT, anchor='c', fill='y', expand=True)
+        # shuffle_btn = ttk.Button(self.window, text='~', width=self.button_width,
+        #                           command=self.shuffle, style='my.TButton')
+        # shuffle_btn.pack(side=tk.LEFT, anchor='c', fill='y', expand=True)
 
         previous_btn = ttk.Button(self.window, text=' << ', width=self.button_width,
                                   command=self.previous, style='my.TButton')
@@ -84,17 +89,6 @@ class SpotifyPlayer():
                                   command=self.like, style='my.TButton')
         like_btn.pack(side=tk.LEFT, anchor='c', fill='y', expand=True)
 
-    def shuffle(self):
-        """
-        Shuffle the songs when playing the playlist
-        """
-        try:
-            self.client.shuffle()
-        except spotipy.exceptions.SpotifyException as e:
-            if e.reason == 'NO_ACTIVE_DEVICE':
-                messagebox.showwarning("Spotify",
-                                       "No Device Found. Please open Spotify on your device of choice")
-
     def previous(self):
         """
         Go to the previous song in the playlist
@@ -108,6 +102,10 @@ class SpotifyPlayer():
                                        "No Device Found. Please open Spotify on your device of choice")
             elif e.reason == 'UNKNOWN':
                 print("Cannot play previous if first song listened to")
+            elif "The access token expired" in e.msg:
+                self.client.refresh_token()
+                self.client.play()
+                self.callback("play")
 
     def pause(self):
         """
@@ -120,6 +118,13 @@ class SpotifyPlayer():
             if e.reason == 'NO_ACTIVE_DEVICE':
                 messagebox.showwarning("Spotify",
                                        "No Device Found. Please open Spotify on your device of choice")
+            elif "Restriction violated" in e.msg:
+                # the song is already paused
+                pass
+            elif "The access token expired" in e.msg:
+                self.client.refresh_token()
+                self.client.pause()
+                self.callback("pause")
 
     def play(self):
         """
@@ -132,6 +137,13 @@ class SpotifyPlayer():
             if e.reason == 'NO_ACTIVE_DEVICE':
                 messagebox.showwarning("Spotify",
                                        "No Device Found. Please open Spotify on your device of choice")
+            elif "Restriction violated" in e.msg:
+                # the song is already playing
+                pass
+            elif "The access token expired" in e.msg:
+                self.client.refresh_token()
+                self.client.play()
+                self.callback("play")
 
     def next(self):
         """
@@ -144,6 +156,10 @@ class SpotifyPlayer():
             if e.reason == 'NO_ACTIVE_DEVICE':
                 messagebox.showwarning("Spotify",
                                        "No Device Found. Please open Spotify on your device of choice")
+            elif "The access token expired" in e.msg:
+                self.client.refresh_token()
+                self.client.play()
+                self.callback("play")
 
     def like(self):
         """

@@ -65,7 +65,7 @@ def add_website_link(window: tk.Frame,
 
 def set_plot_color(fig: matplotlib.figure,
                    ax: matplotlib.axes.Axes,
-                   fg_string: str) -> Tuple(matplotlib.figure, matplotlib.axes.Axes):
+                   fg_string: str) -> Tuple[matplotlib.figure, matplotlib.axes.Axes]:
     """
     Set the color of the plot
 

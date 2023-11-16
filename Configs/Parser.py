@@ -32,6 +32,7 @@ class Parser():
         Parser.__tk_theme = Parser.configs.get("GUI", "tk_theme")
         Parser.__plt_theme = Parser.configs.get("GUI", "plt_theme")
         Parser.__goal = Parser.configs.get("Timer", "goal")
+        Parser.__pomodoro = Parser.configs.get("Timer", "pomodoro")
         Parser.__timer_data_file = Parser.configs.get("Drive", "timer_data_file")
         Parser.__offline_data_file = Parser.configs.get("Drive", "offline_data_file")
 
@@ -72,6 +73,16 @@ class Parser():
         :rtype: str
         """
         return Parser.__goal
+
+    @staticmethod
+    def get_pomodoro() -> str:
+        """
+        Get the pomodoro time the suer desires in minutes
+
+        :return: the pomodoro time
+        :rtype: str
+        """
+        return Parser.__pomodoro
 
     @staticmethod
     def get_timer_data_file() -> str:

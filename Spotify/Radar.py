@@ -24,6 +24,7 @@ import multiprocessing
 import time
 import random
 import sched, time
+from .TableDropDown import TableDropDown
 
 try:
     from ..Database import Database
@@ -46,56 +47,20 @@ class Radar():
     Interactive Radar plot class to choose parameters to create playlists
     """
 
-    def __init__(self):
-        """
-        Initialize the Radar class with Spotify credentials as well as database
-        """
-        self.__db_cr = Credentials.get_database_credentials()
-        self.__db_id = self.__db_cr['id']
-        self.__db_password = self.__db_cr['password']
-        self.__db_name = self.__db_cr["db_name"]
-        self.__spotify_cr = Credentials.get_spotify_credentials()
-        if len(self.__spotify_cr['username']) == 0 or \
-            len(self.__spotify_cr['client_id']) == 0 or \
-                len(self.__spotify_cr['client_secret']) == 0:
-                    print("Warning, Spotify credentials not found, will skip it")
-        self.client = APIClient([self.__spotify_cr['username']],
-                                [self.__spotify_cr['client_id']],
-                                [self.__spotify_cr['client_secret']])
-        self.db = Database(self.__db_id, self.__db_password, self.__db_name)
-        self.columns = [column[0] for column in self.db.get_column_names()]
-        # TODO: maybe currently playing later
-        self.currently_playing = self.client.get_current_track()
-
-    def build_frame(self, window: ttk.Frame, bg_string:str, fg_string:str):
-        """
-        Build the frame of the GUI for the Radar plot
-
-        :param window: the Frame of the Window
-        :type window: ttk.Frame
-        :param bg_string: the background color
-        :type bg_string: str
-        :param fg_string: the foreground color
-        :type fg_string: str
-        """
+    def __init__(self, window, __db_id, __db_password, __db_name, fg_string, bg_string, currently_playing, color_palette, client):
         self.window = window
-        self.move_flag = False
-        self.area = None
-        self.bg_string = bg_string
+        self.__db_id = __db_id
+        self.__db_password = __db_password
+        self.__db_name = __db_name
         self.fg_string = fg_string
-        self.color_theme = Parser.get_plt_theme()
-        self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 7))[1:-1]
-
-        # add spotify website link on to spotify
-        text = "Spotify"
-        url = "https://open.spotify.com/?"
-        font= ('Aerial', '16', 'underline')
-        side = "top"
-        add_website_link(self.window, url, text, font, side,
-                         fg = self.fg_string, bg = self.bg_string)
-
+        self.bg_string = bg_string
+        self.currently_playing = currently_playing
+        self.color_palette = color_palette
+        self.client = client
         # # Test of some genres analysis
         # self.analyze_artists()
+        self.db = Database(self.__db_id, self.__db_password, self.__db_name)
+        self.columns = [column[0] for column in self.db.get_column_names()]
 
         # features that we get from the database and that we're most interested in
         self.cols = ['acousticness', 'energy', 'danceability', 'valence', 'liveness',
@@ -133,27 +98,22 @@ class Radar():
         # Initialize the violin plots to show the distribution of the data
         self.violin_pos, self.violin_neg = None, None
 
-        # Initialize the spotify player to play songs
-        spotify_player_frame = ttk.Frame(self.window)
-        spotify_player_frame.pack(side='bottom', anchor='c', fill='both', expand=True)
-        self.spotify_player = SpotifyPlayer(spotify_player_frame,
-                                            self.update_monitor,
-                                            self.__spotify_cr,
-                                            self.fg_string,
-                                            self.bg_string)
-
-    def update_monitor(self, action: str):
+    def display_labels(self, window: ttk.Frame):
         """
-        Update the monitor based on the action that was performed on SpotifyPlayer
+        Display the labels of the variables on the GUI
 
-        :param action: the action name
-        :type action: str
+        :param window: the frame to display labels on
+        :type window: ttk.Frame
         """
-        if action == "pause":
-            # remove the plot
-            self.playing[0].remove()
-        else:
-            self.change_song()
+        self.labels = []
+        for i in range(len(self.cols)):
+            # create a label for each variable and place it on the GUI on the left
+            # part of the window, each one down the other
+            text = tk.StringVar()
+            text.set(self.cols[i]+": "+ str(self.values[i]))
+            label = ttk.Label(window, text = text.get(), font=("Arial",14))
+            label.grid(row=i//3, column=i%3, sticky="nsew")
+            self.labels.append(label)
 
     def add_playlist_buttons(self):
         """
@@ -263,22 +223,6 @@ class Radar():
             self.show_histogram(i)
         self.canvas.draw()
 
-    def display_labels(self, window: ttk.Frame):
-        """
-        Display the labels of the variables on the GUI
-
-        :param window: the frame to display labels on
-        :type window: ttk.Frame
-        """
-        self.labels = []
-        for i in range(len(self.cols)):
-            # create a label for each variable and place it on the GUI on the left
-            # part of the window, each one down the other
-            text = tk.StringVar()
-            text.set(self.cols[i]+": "+ str(self.values[i]))
-            label = ttk.Label(window, text = text.get(), font=("Arial",14))
-            label.grid(row=i//3, column=i%3, sticky="nsew")
-            self.labels.append(label)
 
     def change_value(self, i: int):
         """
@@ -583,27 +527,3 @@ class Radar():
                 values.append(self.values[i]*(self.limits[i][1]-self.limits[i][0]))
         return values, boundaries
 
-class TableDropDown(ttk.Combobox):
-    """
-    Class to handle the DropDown table for playlists
-
-    Inherited from ttk.Combobox
-    """
-    def __init__(self, parent: ttk.Frame, values: List[str], font: Tuple[str, int]):
-        """
-        Initialize the TableDropDown class
-
-        :param parent: the frame where to put the DropDown box
-        :type parent: ttk.Frame
-        :param values: The values to write inside the box
-        :type values: List[str]
-        :param font: the font name and size
-        :type font: Tuple[str, int]
-        """
-        self.current_table = tk.StringVar() # create variable for table
-        ttk.Combobox.__init__(self, parent, font=font)#  init widget
-        self.config(textvariable = self.current_table,
-                    state = "readonly",
-                    values = values)
-        self.current(0) # index of values for current table
-        self.pack(side="left") # place drop down box

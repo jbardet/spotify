@@ -20,6 +20,10 @@ class APIClient:
         self.__ips = self.__getProxys()
         self.sp = spotipy.Spotify(auth=self.__tokens[0])
 
+    def refresh_token(self):
+        self.__tokens = self.__getToken()
+        self.sp = spotipy.Spotify(auth=self.__tokens[0])
+
     def __getToken(self) -> str:
 
         redirect_uri = 'http://localhost:7777/callback'

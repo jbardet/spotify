@@ -20,6 +20,7 @@ import os
 from Configs.Parser import Parser
 from Credentials.Credentials import Credentials
 from typing import Callable, Tuple, List
+from Drive.Drive import Drive
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -40,7 +41,9 @@ class Timer():
         """
         self.timer_data_file = Parser.get_timer_data_file()
         self.offline_data_file = Parser.get_offline_work_file()
+        self.pomdoro_time = Parser.get_pomodoro()
         self.callback = callback
+        self.drive = Drive()
 
     def build_frame(self, window: ttk.Frame, objective: float, bg_string: str, fg_string: str):
         """
@@ -108,8 +111,10 @@ class Timer():
         Start the timer if it is not already started otherwise juste play it from
         where we paused
         """
-        self.timer_dict['event'].append("start")
-        self.timer_dict['time'].append(datetime.now())
+        print(self.run)
+        if not self.run:
+            self.timer_dict['event'].append("start")
+            self.timer_dict['time'].append(datetime.now())
         self.run = True
         if not hasattr(self, 'submit_thread'):
             self.event = threading.Event()
@@ -193,8 +198,10 @@ class Timer():
         """
         Pause the timer
         """
-        self.timer_dict['event'].append("pause")
-        self.timer_dict['time'].append(datetime.now())
+        print(self.run)
+        if self.run:
+            self.timer_dict['event'].append("pause")
+            self.timer_dict['time'].append(datetime.now())
         # pause the thread
         self.run = False
 
@@ -202,9 +209,10 @@ class Timer():
         """
         Stop the timer
         """
+        if not self.timer_dict['event'][-1] == "stop":
+            self.timer_dict['event'].append("stop")
+            self.timer_dict['time'].append(datetime.now())
         self.run = False
-        self.timer_dict['event'].append("stop")
-        self.timer_dict['time'].append(datetime.now())
         # stop the thread
         try:
             self.event.set()
@@ -223,10 +231,10 @@ class Timer():
 
     def reset(self):
         """
-        Reset the timer to best Pomodoro time (50 minutes)
+        Reset the timer to best Pomodoro time
         """
         self.hour.set("00")
-        self.minute.set("50")
+        self.minute.set(self.pomdoro_time)
         self.second.set("00")
 
     def add_timer(self) -> None:
@@ -430,7 +438,7 @@ class Timer():
         """
         Load the data from the Google Drive spreadsheets
         """
-        df_drive, _ = self.get_data(self.timer_data_file)
+        df_drive, _ = self.drive.get_data(self.timer_data_file)
         retry = True
         while retry:
             retry = False
@@ -449,7 +457,7 @@ class Timer():
                 retry = True
         self.timer_suppress = len(self.timer_dict["event"])
 
-        df_drive, _ = self.get_data(self.offline_data_file)
+        df_drive, _ = self.drive.get_data(self.offline_data_file)
         retry = True
         while retry:
             retry = False
@@ -471,55 +479,12 @@ class Timer():
                 retry = True
         self.offline_suppress = len(self.offline_dict["category"])
 
-    def get_data(self, name: str) -> Tuple[pd.DataFrame, pygsheets.Worksheet]:
-        """
-        Get the data from the Google Drive spreadsheet
-
-        :param name: the name of the file
-        :type name: str
-        :return: the dataframe from the file read and the worksheet
-        :rtype: Tuple[pd.DataFrame, pygsheets.Worksheet]
-        """
-        # authorization
-        try:
-            gc = pygsheets.authorize(service_file='Credentials/spotify-402405-59d8f4e06e41.json')
-        except FileNotFoundError:
-            gc = pygsheets.authorize(service_file=os.path.join(sys.path[-1],
-                                                               'Credentials/spotify-402405-59d8f4e06e41.json'))
-        #open the google spreadsheet (where 'PY to Gsheet Test' is the name of my sheet)
-        # DO NOT FORGET TO SHARE THE SPREADSHEET
-        try:
-            sh = gc.open(name)
-            #select the first sheet
-            wks = sh[0]
-
-            # existing df
-            df_drive = wks.get_as_df()
-            return df_drive, wks
-        except googleapiclient.errors.HttpError:
-            print(f"HTTP error when trying to access {name}")
-            return None, None
-        except pygsheets.exceptions.SpreadsheetNotFound:
-            print(f"Spreadsheet {name} not found, will not use/save data")
-            return pd.DataFrame(), None
-
     def save_data(self):
         """
         Save data to the Google Drive spreadsheet
         """
-        df_drive, wks = self.get_data(self.timer_data_file)
-        df_drive.drop(df_drive.tail(self.timer_suppress).index, inplace = True)
-        #update the first sheet with df, starting at cell B2.
-        df = pd.DataFrame.from_dict(self.timer_dict)
-        df_save = pd.concat([df_drive, df], ignore_index=True)
-        wks.set_dataframe(df_save,(0,0))
-
-        df_drive, wks = self.get_data(self.offline_data_file)
-        df_drive.drop(df_drive.tail(self.offline_suppress).index, inplace = True)
-        #update the first sheet with df, starting at cell B2.
-        df = pd.DataFrame.from_dict(self.offline_dict)
-        df_save = pd.concat([df_drive, df], ignore_index=True)
-        wks.set_dataframe(df_save,(0,0))
+        self.drive.save_data(self.timer_data_file, self.timer_dict, self.timer_suppress)
+        self.drive.save_data(self.offline_data_file, self.offline_dict, self.offline_suppress)
 
     def add_radial_plot(self, time: float):
         """

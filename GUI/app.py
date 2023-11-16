@@ -42,7 +42,8 @@ from ttkthemes import ThemedTk
 from RescueWakaTime.RescueWakaTime import RescueWakaTime
 from Todoist.Todoist import Todoist
 from Timer.Timer import Timer
-from Spotify.Radar import Radar
+# from Spotify.Radar import Radar
+from Spotify.Spotify import Spotify
 # from Calendar.Calendar import Calendar
 # from .Fitbit import Fitbit
 # from .LastFM import LastFM
@@ -92,11 +93,11 @@ class App(tk.Tk):
         # You can use keyboard shortcuts to start and stop the timer
         self.window.bind('<Return>', self.timer.enter)
         self.window.bind('<Escape>', self.timer.stop)
-        self.radar = Radar()
-        self.radar.build_frame(self.middle_frame, self.bg_string, self.fg_string)
+        self.spotify = Spotify()
+        self.spotify.build_frame(self.middle_frame, self.bg_string, self.fg_string)
         # # Espace key is not good because we use it to write in offline work
         # self.window.bind('<space>', self.radar.spotify_player.play)
-        self.radar.plot_radar()
+        # self.radar.plot_radar()
 
         # Unused Apps for now
         # self.google_calendar(calendar_cr)
