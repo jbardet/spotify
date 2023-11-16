@@ -1,5 +1,8 @@
 import webbrowser
 import tkinter as tk
+import matplotlib.pyplot as plt
+import matplotlib
+from typing import Tuple
 
 def round_point_00_2(n: float) -> float:
     """
@@ -30,7 +33,13 @@ def _from_rgb(rgb):
     except TypeError:
         return rgb
 
-def add_website_link(window: tk.Frame, url: str, text: str, font: str, side: str, fg: str, bg: str) -> None:
+def add_website_link(window: tk.Frame,
+                     url: str,
+                     text: str,
+                     font: str,
+                     side: str,
+                     fg: str,
+                     bg: str):
     """
     Add a link to a website
 
@@ -42,13 +51,33 @@ def add_website_link(window: tk.Frame, url: str, text: str, font: str, side: str
     :type text: str
     :param font: the font to use
     :type font: str
+    :param side: the side of the frame to put the line
+    :type side: str
+    :param fg: the foreground color
+    :type fg: str
+    :param bg: the background color
+    :type bg: str
     """
     label = tk.Label(window, text= text, cursor= "hand2",
                      foreground= _from_rgb(fg), font= font, bg=_from_rgb(bg))
     label.pack(side = side, expand = True)
     label.bind("<Button-1>", lambda e: open_url(url))
 
-def set_plot_color(fig, ax, fg_string):
+def set_plot_color(fig: matplotlib.figure,
+                   ax: matplotlib.axes.Axes,
+                   fg_string: str) -> Tuple(matplotlib.figure, matplotlib.axes.Axes):
+    """
+    Set the color of the plot
+
+    :param fig: the figure to color
+    :type fig: matplotlib.figure
+    :param ax: the axis to color
+    :type ax: matplotlib.axes.Axes
+    :param fg_string: the foreground color
+    :type fg_string: str
+    :return: the figure and the axes
+    :rtype: Tuple(matplotlib.figure, matplotlib.axes.Axes)
+    """
     fig.set_facecolor("none")
     ax.set_facecolor("none")
     try:

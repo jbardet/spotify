@@ -19,6 +19,7 @@ from tkinter.ttk import Style
 from typing import Dict, List, Optional, Tuple
 import datetime
 import pickle
+import math
 import requests
 import threading
 import json
@@ -53,10 +54,61 @@ class App(tk.Tk):
     """
 
     def __init__(self):
-        Parser.initialize()
+        """
+        Initialize the GUI App and laucnh different function
+        """
         self.launch()
 
     def launch(self):
+        """
+        Initialize the Window and lunch the different components
+        """
+
+        self.setup_theme()
+
+        self.window.title('Plotting in Tkinter')
+        self.window.state('zoomed')   #zooms the screen to max whenever executed
+        self.window.protocol("WM_DELETE_WINDOW", self.exit)
+
+        self.get_objective()
+        self.build_frames()
+        self.build_apps()
+
+        # No need to run the mainloop from here but only from the Radar plot
+        # self.window.mainloop()
+
+    def build_apps(self):
+        """
+        Initiate, build and run the composants of the app
+        """
+        self.rw_time = RescueWakaTime()
+        self.rw_time.build_frame(self.left_frame, self.bg_string, self.fg_string)
+        self.rw_time.add_analytics()
+        self.todoist = Todoist()
+        self.todoist.build_frame(self.upright_frame, self.bg_string, self.fg_string)
+        self.todoist.add_tasks()
+        self.timer = Timer(self.update)
+        self.timer.build_frame(self.downright_frame, self.objective, self.bg_string, self.fg_string)
+        # You can use keyboard shortcuts to start and stop the timer
+        self.window.bind('<Return>', self.timer.enter)
+        self.window.bind('<Escape>', self.timer.stop)
+        self.radar = Radar()
+        self.radar.build_frame(self.middle_frame, self.bg_string, self.fg_string)
+        # # Espace key is not good because we use it to write in offline work
+        # self.window.bind('<space>', self.radar.spotify_player.play)
+        self.radar.plot_radar()
+
+        # Unused Apps for now
+        # self.google_calendar(calendar_cr)
+        # self.lastfm = LastFM(lastfm_cr)
+        # self.lastfm.save_data()
+        # self.fitbit = Fitbit(fitbit_cr)
+        # fitbit.get_data()
+
+    def setup_theme(self):
+        """
+        Initialize the window and buttons with the theme from the config file
+        """
         self.window = ThemedTk(theme=Parser.get_tk_theme())
         s = ttk.Style(self.window)
         s.configure('my.TButton', font=('Aerial', 18))
@@ -70,25 +122,14 @@ class App(tk.Tk):
         try:
             fg_16bit = self.window.winfo_rgb(fg)
         except tk._tkinter.TclError:
-            print("fail")
+            # sometimes the foreground color is not defined in the theme
             fg_16bit = self.window.winfo_rgb('#464646')
         self.fg_string = "#" + "".join([hex(fg_color >> 8)[2:] for fg_color in fg_16bit])
 
-        # self.window = tk.Tk()
-        self.window.title('Plotting in Tkinter')
-        self.window.state('zoomed')   #zooms the screen to maxm whenever executed
-        self.window.protocol("WM_DELETE_WINDOW", self.exit)
-        # self.window.configure(background='')
-
-        today = datetime.datetime.today()
-        # objective = 2
-        # if the day is a week-end, congratulate the user to put work on week-ends with a pop-up window
-        if today.weekday() == 5 or today.weekday() == 6:
-            messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
-            objective = 4
-        else:
-            objective = float(Parser.get_goal())
-        # make 3 frames from the main window
+    def build_frames(self):
+        """
+        Make the frames from the main window
+        """
         self.left_frame = ttk.Frame(self.window)
         self.left_frame.pack(side='left', anchor='c', fill='both', expand=True,
                              padx=5, pady=5)
@@ -105,51 +146,6 @@ class App(tk.Tk):
         self.downright_frame.pack(side='bottom', anchor='c', fill='both', expand=True,
                                   padx=5, pady=(0,5))
 
-        # self.radio_links = ["https://coderadio.freecodecamp.org/",
-        #                     "https://musicforprogramming.net/latest/",
-        #                     "https://radio.x-team.com/",
-        #                     "https://www.lofi.cafe/"]
-        # text = "RescueTime"
-        # url = "https://www.rescuetime.com/rtx/reports/activities"
-        # font= ('Aerial 12')
-        # side = "top"
-        # add_website_link(self.window, url, text, font, side)
-        self.rw_time = RescueWakaTime()
-        self.rw_time.build_frame(self.left_frame, self.bg_string, self.fg_string)
-        self.rw_time.add_analytics()
-        self.todoist = Todoist()
-        self.todoist.build_frame(self.upright_frame, self.bg_string, self.fg_string)
-        self.todoist.add_tasks()
-        self.timer = Timer(self.update)
-        self.timer.build_frame(self.downright_frame, objective, self.bg_string, self.fg_string)
-        self.window.bind('<Return>', self.timer.enter)
-        self.window.bind('<Escape>', self.timer.stop)
-        self.radar = Radar()
-        self.radar.build_frame(self.middle_frame, self.bg_string, self.fg_string)
-        # self.window.bind('<space>', self.radar.spotify_player.play)
-        self.radar.plot_radar()
-        # # # self.google_calendar(calendar_cr)
-        # # # add link to notion: https://www.notion.so/
-        # # # maybe onenote as well ?
-        # # # import time
-        # # # time.sleep(100)
-        # # self.lastfm = LastFM(lastfm_cr)
-        # # self.lastfm.save_data()
-        # self.radar = Radar(spotify_cr, db_cr, self.middle_frame)
-        # thd = threading.Thread(target=self.radar.plot_radar)   # timer thread
-        # thd.daemon = True
-        # thd.start()
-        # # self.fitbit = Fitbit(fitbit_cr)
-        # # fitbit.get_data()
-
-        # # create a button in the menu that creates a weekly review and saves data into databases
-        # # and also on disk
-        # # weekly_button = Button(master = self.window, height = 2, width = 10, text = "Weekly Review", command = self.weekly_review)
-        # # weekly_button.pack(side=ttk.TOP)
-        # # self.weekly_review()
-
-        # self.window.mainloop()
-
     def update(self):
         self.rw_time.update_analytics()
 
@@ -158,3 +154,15 @@ class App(tk.Tk):
         self.timer.save_data()
         self.radar.spotify_player.save_data()
         self.window.destroy()
+
+    def get_objective(self):
+        """
+        Get the objective of the day depending on week/weekends
+        """
+        today = datetime.datetime.today()
+        # if the day is a week-end, congratulate the user to put work on week-ends
+        # with a pop-up window
+        self.objective = float(Parser.get_goal())
+        if today.weekday() == 5 or today.weekday() == 6:
+            messagebox.showinfo("Congrats!", "You are working on week-ends! Keep the good work!")
+            self.objective = math.ceil(self.objective/2)

@@ -15,6 +15,7 @@ import datetime
 import pickle
 import requests
 import threading
+import math
 import json
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pandas as pd
@@ -75,14 +76,21 @@ def get_data_folder():
 try:
     from GUI.app import App
     from Credentials.Credentials import Credentials
+    from Configs.Parser import Parser
     from Analysis.Analyzer import Analyzer
 except ModuleNotFoundError:
     sys.path.append(os.path.dirname(get_script_folder()))
     from GUI.app import App
     from Credentials.Credentials import Credentials
+    from Configs.Parser import Parser
+    from Analysis.Analyzer import Analyzer
 
 def main(params) -> None:
-    Credentials.initialize()
+    try:
+        Credentials.initialize()
+    except FileNotFoundError:
+        sys.exit(1)
+    Parser.initialize()
     App()
     # analyzer = Analyzer()
     # analyzer.weekly_review()
@@ -90,7 +98,8 @@ def main(params) -> None:
     #     App()
     # else:
     #     print("analyze")
-    #     Analyzer()
+    #     analyzer = Analyzer()
+    #     analyzer.weekly_review()
 
 if __name__ == '__main__':
     main(sys.argv[1:])

@@ -1,6 +1,5 @@
 import time
 import tkinter as tk
-from tkinter import messagebox
 from Helpers.helpers import add_website_link, set_plot_color
 import numpy as np
 import pandas as pd
@@ -20,6 +19,7 @@ import sys
 import os
 from Configs.Parser import Parser
 from Credentials.Credentials import Credentials
+from typing import Callable, Tuple, List
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -29,18 +29,32 @@ class Timer():
     Class to handle the POMODORO timer but also the links to the stretching
     websites
     """
-    def __init__(self, callback) -> None:
+
+    def __init__(self, callback: Callable) -> None:
         """
         Initialize the frame with the timer and the links
 
-        :param window: the window frame where to place the timer and the links
-        :type window: ttk.Frame
+        :param callback: the callback function to call when the timer is stopped
+                         that will update the plots from the RescueWakaTime window
+        :type callback: Callable
         """
         self.timer_data_file = Parser.get_timer_data_file()
         self.offline_data_file = Parser.get_offline_work_file()
         self.callback = callback
 
     def build_frame(self, window: ttk.Frame, objective: float, bg_string: str, fg_string: str):
+        """
+        Build the frame for the Timer window
+
+        :param window: the Frame of the Window
+        :type window: ttk.Frame
+        :param objective: the objective number of hours to work on the day
+        :type objective: float
+        :param bg_string: the background color
+        :type bg_string: str
+        :param fg_string: the foreground color
+        :type fg_string: str
+        """
         self.window = window
         self.min = np.inf
         self.run = False
@@ -51,7 +65,7 @@ class Timer():
         self.color = plt.get_cmap(self.color_theme)
         self.colormap = self.color(np.linspace(0, 1, 7))[1:-1]
 
-        # Create empty dataframe
+        # Create empty dictionnary that will then create DataFrames
         self.timer_dict = {"event": [],
                            "time": []}
 
@@ -70,42 +84,61 @@ class Timer():
         self.add_radial_plot(total_time)
         self.add_timer()
 
-    def compute_time(self):
-        # gather the sum of the time for all offline_dict entries
-        offline_time = np.sum([(datetime.strptime(self.offline_dict['end'][i], "%H:%M") - datetime.strptime(self.offline_dict['start'][i], "%H:%M")).seconds for i in range(len(self.offline_dict['start']))])
+    def compute_time(self) -> float:
+        """
+        Gather the sum of the time for all offline_dict entries as well as timer
+        data from the day
+
+        :return: the total time the Timer was running on the day
+        :rtype: float
+        """
+        offline_time = np.sum([(datetime.strptime(self.offline_dict['end'][i], "%H:%M") - \
+            datetime.strptime(self.offline_dict['start'][i], "%H:%M")).seconds \
+                for i in range(len(self.offline_dict['start']))])
         timer_time = 0
         for i, event in enumerate(self.timer_dict['event']):
             if i == 0: continue
-            if self.timer_dict['event'][i-1] == "start" and (event == 'pause' or event == 'stop' or event == "finish"):
+            if self.timer_dict['event'][i-1] == "start" and \
+                (event == 'pause' or event == 'stop' or event == "finish"):
                 timer_time += (self.timer_dict['time'][i] - self.timer_dict['time'][i-1]).total_seconds()
         return offline_time + timer_time
 
     def play(self):
+        """
+        Start the timer if it is not already started otherwise juste play it from
+        where we paused
+        """
         self.timer_dict['event'].append("start")
         self.timer_dict['time'].append(datetime.now())
-        print("play")
         self.run = True
-        # print(hasattr(self, 'submit_thread'))
         if not hasattr(self, 'submit_thread'):
-            # print("start new one")
             self.event = threading.Event()
             self.submit_thread = threading.Thread(target=self.submit, args=(self.event,))
             self.submit_thread.daemon = True
             self.submit_thread.start()
 
     def enter(self, event: tk.Event):
+        """
+        When the keyboard enter has been pressed, start the timer if it is not
+        running else if it runs pause it
+
+        :param event: the keyboard touch clicked
+        :type event: tk.Event
+        """
         if self.run:
             self.pause()
         else:
             self.play()
 
-    def submit(self, event):
+    def submit(self, event: tk.Event):
         """
-        Start the timer
+        Start the timer if we click the Start button or the Enter key
+
+        :param event: the keyboard touch or button clicked
+        :type event: tk.Event
         """
         try:
-            # the input provided by the user is
-            # stored in here :temp
+            # the input provided by the user
             self.sec = int(self.hour.get())*3600 + int(self.minute.get())*60 + int(self.second.get())
         except:
             print("Please input the right value")
@@ -124,26 +157,23 @@ class Timer():
             if mins >60:
                 hours, mins = divmod(mins, 60)
 
-            # using format () method to store the value up to
-            # two decimal places
+            # using format () method to store the value up to two decimal places
             self.hour.set("{0:2d}".format(hours))
             self.minute.set("{0:2d}".format(mins))
             self.second.set("{0:2d}".format(secs))
 
-            # updating the GUI window after decrementing the
-            # temp value every time
+            # updating the GUI window after decrementing the temp value every time
             self.window.update()
             time.sleep(1)
 
             # when temp value = 0; then a messagebox pop's up
-            # with a message:"Time's up"
+            # with a message: with the stretching links
             if (self.sec == 0):
                 self.timer_dict['event'].append("finish")
                 self.timer_dict['time'].append(datetime.now())
                 toplevel = tk.Toplevel(self.window)
                 toplevel.title("Time Countdown")
                 toplevel.attributes('-topmost', 'true')
-                # toplevel.state('zoomed')
                 label = ttk.Label(toplevel,
                                  text="Time's up. Take a break, here are some stretching links:",
                                  font=("Arial",18,""))
@@ -156,25 +186,22 @@ class Timer():
                 self.add_radial_plot(total_time)
                 self.callback()
 
-            # after every one sec the value of temp will be decremented
-            # by one
+            # after every one sec the value of temp will be decremented by one
             self.sec -= 1
 
     def pause(self):
         """
         Pause the timer
         """
-        print("pause")
         self.timer_dict['event'].append("pause")
         self.timer_dict['time'].append(datetime.now())
         # pause the thread
         self.run = False
 
-    def stop(self, event=None):
+    def stop(self, event: tk.Event = None):
         """
         Stop the timer
         """
-        print("stop")
         self.run = False
         self.timer_dict['event'].append("stop")
         self.timer_dict['time'].append(datetime.now())
@@ -195,6 +222,9 @@ class Timer():
         self.callback()
 
     def reset(self):
+        """
+        Reset the timer to best Pomodoro time (50 minutes)
+        """
         self.hour.set("00")
         self.minute.set("50")
         self.second.set("00")
@@ -251,10 +281,6 @@ class Timer():
         # Setting the default value as 50 minutes (preferred time for a pomodoro)
         self.reset()
 
-        # # # Set a label to explain the timer
-        # # timer_label = Label(self.window, text="POMODORO: ", font=("Arial",18,""))
-        # # timer_label.pack(side = tk.TOP)
-
         # Use of Entry class to take input from the user
         hourEntry= ttk.Entry(timer_frame1, width=3, font=('Aerial', 18),
                          textvariable=self.hour)
@@ -277,10 +303,12 @@ class Timer():
         btn = ttk.Button(timer_frame2, text='Stop', command= self.stop, style='my.TButton')
         btn.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
 
-
     def add_links(self, window: ttk.Frame) -> None:
         """
         Add links to the stretching websites on the GUI
+
+        :param window: the frame to place the links
+        :type window: ttk.Frame
         """
 
         texts = ["healthline", "verywellfit"]
@@ -291,21 +319,40 @@ class Timer():
         font = ('Aerial', '16', 'underline')
         side = "bottom"
 
-        add_website_link(window, urls[0], texts[0], font, side, fg = self.fg_string, bg=self.bg_string)
-        add_website_link(window, urls[1], texts[1], font, side, fg = self.fg_string, bg=self.bg_string)
+        add_website_link(window, urls[0], texts[0], font, side,
+                         fg = self.fg_string, bg=self.bg_string)
+        add_website_link(window, urls[1], texts[1], font, side,
+                         fg = self.fg_string, bg=self.bg_string)
 
     def enter_offline_work(self):
+        """
+        Save offline work to the dictionary before it will be saved to spreadsheet
+        It checks the following conditions on entered time:
+        - the time entered is valid
+        - start time is before end time
+        - end time is before 10 minutes from now
+        - date is today or before
+        - the entered time is not already overlapping with some offline time
+            already in the database
+        """
         try:
             datetime.strptime(self.start.get(), "%H:%M")
             datetime.strptime(self.end.get(), "%H:%M")
         except ValueError:
-            messagebox.showerror("Error", "Please enter a valid time")
+            tk.messagebox.showerror("Error", "Please enter a valid time")
             return
         conflict = False
         try:
-            assert datetime.strptime(self.start.get(), "%H:%M") < datetime.strptime(self.end.get(), "%H:%M"), "Start time must be before end time"
-            assert datetime.strptime(self.end.get(), "%H:%M") < datetime.now() + timedelta(minutes = 10), "End time must be before 10 minutes from now"
-            assert datetime.strptime(self.date.get(), "%Y-%m-%d").date()<=date.today(), "Date must be today or before"
+            assert datetime.strptime(self.start.get(), "%H:%M") < \
+                datetime.strptime(self.end.get(), "%H:%M"), \
+                    "Start time must be before end time"
+            assert datetime.strptime(self.end.get(), "%H:%M") < \
+                datetime.now() + timedelta(minutes = 10), \
+                    "End time must be before 10 minutes from now"
+            assert datetime.strptime(self.date.get(), "%Y-%m-%d").date() <= \
+                date.today(),"Date must be today or before"
+
+            # check that entered time does not overlap with timer values
             for i, event in enumerate(self.offline_dict['date']):
                 if event == datetime.strptime(self.date.get(), "%Y-%m-%d").date():
                     end_before_start = self.offline_dict['end'][i] < self.start.get()
@@ -318,9 +365,13 @@ class Timer():
                     msg+= f"Start: {self.offline_dict['start'][i]}\n"
                     msg+= f"End: {self.offline_dict['end'][i]}\n"
                     msg+= f"Date: {self.offline_dict['date'][i]}\n"
-                    assert end_before_start or start_after_end or (start_before_start and end_after_end), msg
+                    assert end_before_start or start_after_end or \
+                        (start_before_start and end_after_end), msg
+
+            # check that entered time does not overlap with offline timer values
             for i, event in enumerate(self.timer_dict['event']):
-                event_inside_offline_work = datetime.strptime(self.start.get(), "%H:%M")<self.timer_dict['time'][i]<datetime.strptime(self.end.get(), "%H:%M")
+                event_inside_offline_work = datetime.strptime(self.start.get(), "%H:%M") < \
+                    self.timer_dict['time'][i]<datetime.strptime(self.end.get(), "%H:%M")
                 if event_inside_offline_work:
                     if event == 'start':
                         # we don't want to already have an event that is not finished
@@ -332,15 +383,22 @@ class Timer():
                             conflict=True
                             self.ask_user_for_offline_time_issue(i-1)
         except AssertionError as e:
+            print(e)
             conflict = True
         if not conflict:
             self.add_offline_work()
 
     def update_plot(self):
+        """
+        Update the plot with the new times added
+        """
         total_time = self.compute_time()
         self.add_radial_plot(total_time)
 
     def add_offline_work(self):
+        """
+        Add the offline work entered to the dictionary and update the plots
+        """
         self.offline_dict['category'].append(self.category.get())
         self.offline_dict['description'].append(self.description.get())
         self.offline_dict['start'].append(self.start.get())
@@ -348,12 +406,19 @@ class Timer():
         self.offline_dict['date'].append(date.today())
         self.update_plot()
 
-    def ask_user_for_offline_time_issue(self, i):
+    def ask_user_for_offline_time_issue(self, i: int):
+        """
+        Ask the user whether he wants to delete offline work entered before or
+        if he wants to cancel the offline time he wants to add
+
+        :param i: the index of the offline event that overlaps in the dictionary
+        :type i: int
+        """
         msg = "Start time has been found during the offline work interval you've given.\n"\
                 "Do you want me to suppress the timer data?"
-        msg_box = messagebox.askquestion('Time Conflict',
-                                        msg,
-                                        icon='warning')
+        msg_box = tk.messagebox.askquestion('Time Conflict',
+                                            msg,
+                                            icon='warning')
         if msg_box == "yes":
             self.timer_dict['event'] = self.timer_dict['event'][:i]+self.timer_dict['event'][i+1:]
             self.timer_dict['time'] = self.timer_dict['time'][:i]+self.timer_dict['time'][i+1:]
@@ -362,6 +427,9 @@ class Timer():
             return
 
     def load_data(self):
+        """
+        Load the data from the Google Drive spreadsheets
+        """
         df_drive, _ = self.get_data(self.timer_data_file)
         retry = True
         while retry:
@@ -374,6 +442,7 @@ class Timer():
                     self.timer_dict["event"].append(row['event'])
                     self.timer_dict["time"].append(row['time'])
             except KeyError:
+                # there is no data in the spreadsheet
                 pass
             except TypeError:
                 print("Fail to load timer data, retrying")
@@ -381,12 +450,12 @@ class Timer():
         self.timer_suppress = len(self.timer_dict["event"])
 
         df_drive, _ = self.get_data(self.offline_data_file)
-        # find columns where the date is today
         retry = True
         while retry:
             retry = False
             try:
                 df_drive['date'] = pd.to_datetime(df_drive['date'])
+                # find columns where the date is today
                 today_work = df_drive[df_drive['date'].dt.date == date.today()]
                 for _, row in today_work.iterrows():
                     self.offline_dict["category"].append(row['category'])
@@ -395,13 +464,22 @@ class Timer():
                     self.offline_dict["end"].append(row['end'])
                     self.offline_dict["date"].append(row['date'].date())
             except KeyError:
+                # there is no data in the spreadsheet
                 pass
             except TypeError:
                 print("Fail to load offline data, retrying")
                 retry = True
         self.offline_suppress = len(self.offline_dict["category"])
 
-    def get_data(self, name):
+    def get_data(self, name: str) -> Tuple[pd.DataFrame, pygsheets.Worksheet]:
+        """
+        Get the data from the Google Drive spreadsheet
+
+        :param name: the name of the file
+        :type name: str
+        :return: the dataframe from the file read and the worksheet
+        :rtype: Tuple[pd.DataFrame, pygsheets.Worksheet]
+        """
         # authorization
         try:
             gc = pygsheets.authorize(service_file='Credentials/spotify-402405-59d8f4e06e41.json')
@@ -426,6 +504,9 @@ class Timer():
             return pd.DataFrame(), None
 
     def save_data(self):
+        """
+        Save data to the Google Drive spreadsheet
+        """
         df_drive, wks = self.get_data(self.timer_data_file)
         df_drive.drop(df_drive.tail(self.timer_suppress).index, inplace = True)
         #update the first sheet with df, starting at cell B2.
@@ -440,28 +521,20 @@ class Timer():
         df_save = pd.concat([df_drive, df], ignore_index=True)
         wks.set_dataframe(df_save,(0,0))
 
-    def add_radial_plot(self, time: float) -> None:
+    def add_radial_plot(self, time: float):
         """
-        Make the radial plot and add to the GUI, time is in seconds
+        Make the radial plot and add to the GUI
+
+        :param time: time we already have done [s]
+        :type time: float
         """
-        # I want a radial plot that represents a progress bar from the time we already have done to the objective
-        # the objective is 7.5 hours per day
-        # the time is the time we already have done
-        # plt.close()
+        # I want a radial plot that represents a progress bar from the time we
+        # already have done to the objective
         try:
             self.canvas.get_tk_widget().destroy()
         except AttributeError:
+            # no widget drawn yet
             pass
-        # fig = plt.figure(figsize=(4,4))
-        # ax = fig.add_subplot(111, polar=True)
-        # ax.set_ylim(0, 1)
-        # ax.set_yticklabels([])
-        # ax.set_xticklabels([])
-        # ax.set_theta_zero_location('N')
-        # ax.set_theta_direction(-1)
-        # ax.set_title("Time spent working today", va='bottom')
-        # ax.bar(x=0, height=time/(self.objective*3600), width=2*np.pi, color='green')
-        # base styling logic
         ring_width = 0.3
         outer_radius = 1.5
         inner_radius = outer_radius - ring_width
@@ -471,15 +544,13 @@ class Timer():
         ring_arrays = calculate_rings(value, self.objective)
         fig, ax = plt.subplots()
 
+        # we add a second radial plot when we go beyond 100%
         if value > self.objective:
-            ring_to_label = 0
             outer_edge_color = None
             inner_edge_color = self.fg_string
         else:
-            ring_to_label = 1
             outer_edge_color, inner_edge_color = [self.fg_string, None]
 
-        # plot logic
         try:
             outer_ring, _ = ax.pie(ring_arrays[0], radius=1.5,
                                 colors=[self.colormap[-1], self.colormap[0]],
@@ -506,17 +577,23 @@ class Timer():
         plt.margins(0,0)
         plt.autoscale('enable')
         fig, self.ax = set_plot_color(fig, ax, self.fg_string)
-        # plt.show()
         self.canvas = FigureCanvasTkAgg(fig, master=self.plot_frame)
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=1)
         self.canvas.get_tk_widget().config(bg=self.bg_string)
         self.canvas.draw()
-        self.window.update()
+        # self.window.update()
 
-def calculate_rings(value, objective):
-    #USE: Create an array structure for rings.
-    #INPUT: a df of row length 1 with the first column as the current metric value and the second colum is the target metric value
-    #OUTPUT: an aray of arrays representing each ring
+def calculate_rings(value: float, objective: float) -> List[List[int]]:
+    """
+    Create an array structure for rings
+
+    :param value: current metric value
+    :type value: float
+    :param objective: target metric value
+    :type objective: float
+    :return: the values to put inside the radial graphs
+    :rtype: List[List[int]]
+    """
     if value < objective:
         rings=[[value,objective-value],[0,0]]
     elif value / objective < 2:
@@ -525,10 +602,17 @@ def calculate_rings(value, objective):
         rings = [[0,0],[0,0]]
     return rings
 
-def horizontal_aligner(value, objective):
-    #USE: Determine if the label for the rotating number label should be left/center/right
-    #INPUT: a df of row length 1 with the first column as the current metric value and the second colum is the target metric value
-    #OUTPUT: the proper text alignment
+def horizontal_aligner(value: float, objective: float) -> str:
+    """
+    Determine if the label for the rotating number label should be left/center/right
+
+    :param value: current metric value
+    :type value: float
+    :param objective: target metric value
+    :type objective: float
+    :return: where to place the label horizontally
+    :rtype: str
+    """
     metric = 1.0 * value % objective / objective
     if metric in (0, 0.5):
         align = 'center'
@@ -538,7 +622,17 @@ def horizontal_aligner(value, objective):
         align = 'right'
     return align
 
-def vertical_aligner(value, objective):
+def vertical_aligner(value: float, objective: float) -> str:
+    """
+    Determine if the label for the rotating number label should be left/center/right
+
+    :param value: current metric value
+    :type value: float
+    :param objective: target metric value
+    :type objective: float
+    :return: where to place the label vertically
+    :rtype: str
+    """
     metric = 1.0 * value, objective % objective / objective
     if metric[0] < 0.25:
         align = 'bottom'
@@ -550,11 +644,19 @@ def vertical_aligner(value, objective):
         align = 'center'
     return align
 
+def add_center_label(value: float, objective: float, color: str) -> plt.text:
+    """
+    Add the center label to show the percentage of the objective we have done
 
-#USE: Create a center label in the middle of the radial chart.
-#INPUT: a df of row length 1 with the first column as the current metric value and the second column is the target metric value
-#OUTPUT: the proper text label
-def add_center_label(value, objective, color):
+    :param value: current metric value
+    :type value: float
+    :param objective: target metric value
+    :type objective: float
+    :param color: the color of the label
+    :type color: str
+    :return: the proper text label at the appropriate position
+    :rtype: plt.text
+    """
     percent = str(round(1.0*value/objective*100,1)) + '%'
     return plt.text(0,
            0.2,
@@ -565,12 +667,19 @@ def add_center_label(value, objective, color):
            color=color,
            family = 'sans-serif')
 
-#USE: Create a dynamic outer label that servers a pointer on the ring.
-#INPUT: a df of row length 1 with the first column as the current metric value and the second column is the target metric value
-#OUTPUT: the proper text label at the apropiate position
-def add_current_label(value, objective, color):
-    # print('vertical: ' + vertical_aligner(value, objective))
-    # print('horizontal: ' + horizontal_aligner(value, objective))
+def add_current_label(value: float, objective: float, color: str) -> plt.text:
+    """
+    Add the label to show the metric we have done
+
+    :param value: current metric value
+    :type value: float
+    :param objective: target metric value
+    :type objective: float
+    :param color: the color of the label
+    :type color: str
+    :return: the proper text label at the appropriate position
+    :rtype: plt.text
+    """
     return plt.text(1.5 * np.cos(0.5 *np.pi - 2 * np.pi * (float(value) % objective /objective)),
             1.5 * np.sin(0.5 *np.pi - 2 * np.pi * (float(value) % objective / objective)),
                     str(round(value, 2)),
@@ -580,7 +689,17 @@ def add_current_label(value, objective, color):
                     color=color,
                     family = 'sans-serif')
 
-def add_sub_center_label(objective, color):
+def add_sub_center_label(objective: float, color: str) -> plt.text:
+    """
+    Add the center label to show the objective of the day
+
+    :param objective: target metric value
+    :type objective: float
+    :param color: the color of the label
+    :type color: str
+    :return: the proper text label at the appropriate position
+    :rtype: plt.text
+    """
     amount = 'Goal: ' + str(objective) + 'h'
     return plt.text(0,
             -.1,

@@ -8,3 +8,11 @@ goal = 7.5
 [Drive]
 timer_data_file = timer_data.csv
 offline_data_file = offline_work.csv
+
+[Fitbit]
+fitbit_intraday = fitbit_intraday.csv
+fitbit_day = fitbit_day.csv
+fitbit_spo2 = fitbit_spo2.csv
+fitbit_hrv = fitbit_hrv.csv
+fitbit_sleep_intrad = fitbit_sleep_intrad.csv
+fitbit_sleep_day = fitbit_sleep_day.csv

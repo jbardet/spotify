@@ -35,6 +35,14 @@ class Parser():
         Parser.__timer_data_file = Parser.configs.get("Drive", "timer_data_file")
         Parser.__offline_data_file = Parser.configs.get("Drive", "offline_data_file")
 
+        # Fitbit
+        Parser.__fitbit_intraday = Parser.configs.get("Fitbit", "fitbit_intraday")
+        Parser.__fitbit_day = Parser.configs.get("Fitbit", "fitbit_day")
+        Parser.__fitbit_spo2 = Parser.configs.get("Fitbit", "fitbit_spo2")
+        Parser.__fitbit_hrv = Parser.configs.get("Fitbit", "fitbit_hrv")
+        Parser.__fitbit_sleep_intrad = Parser.configs.get("Fitbit", "fitbit_sleep_intrad")
+        Parser.__fitbit_sleep_day = Parser.configs.get("Fitbit", "fitbit_sleep_day")
+
     @staticmethod
     def get_tk_theme() -> str:
         """
@@ -85,3 +93,62 @@ class Parser():
         """
         return Parser.__offline_data_file
 
+    @staticmethod
+    def get_fitbit_intraday() -> str:
+        """
+        Get the Fitbit Intraday filename
+
+        :return: the name of the file
+        :rtype: str
+        """
+        return Parser.__fitbit_intraday
+
+    @staticmethod
+    def get_fitbit_day() -> str:
+        """
+        Get the Fitbit Day filename
+
+        :return: the name of the file
+        :rtype: str
+        """
+        return Parser.__fitbit_day
+
+    @staticmethod
+    def get_fitbit_spo2() -> str:
+        """
+        Get the Fitbit SpO2 filename
+
+        :return: the name of the file
+        :rtype: str
+        """
+        return Parser.__fitbit_spo2
+
+    @staticmethod
+    def get_fitbit_hrv() -> str:
+        """
+        Get the Fitbit HRV filename
+
+        :return: the name of the file
+        :rtype: str
+        """
+        return Parser.__fitbit_hrv
+
+    @staticmethod
+    def get_fitbit_sleep_intrad() -> str:
+        """
+        Get the Fitbit Sleep Intraday filename
+
+        :return: the name of the file
+        :rtype: str
+        """
+        return Parser.__fitbit_sleep_intrad
+
+    @staticmethod
+    def get_fitbit_sleep_day() -> str:
+        """
+        Get the Fitbit Sleep Day filename
+
+        :return: the name of the file
+        :rtype: str
+        """
+        return Parser.__fitbit_sleep_day

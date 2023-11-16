@@ -39,53 +39,44 @@ except ImportError:
 
 # plt.switch_backend('agg')
 # try multiprocessing: https://stackoverflow.com/questions/75064053/real-time-matplotlib-plotting-within-tkinter-class-object-fed-by-multiprocess-mo
-
-# def updateplot(q, playing, adjusted_values, angles, ax, canvas, color, i):
-#     # try:       #Try to check if there is data in the queue
-#     # result=q.get_nowait()
-
-#     # if result !='Q':
-#         #here get crazy with the plotting, you have access to all the global variables that you defined in the plot function, and have the data that the simulation sent.
-#     playing[0].remove()
-#     if i==0:
-#         # print("pair")
-#         animated_values = [max(0, val -0.5) for val in adjusted_values]
-#         playing = ax.fill(angles, animated_values, color=color, alpha=0.5)
-#         i+=1
-#     else:
-#         # print("impair")
-#         playing = ax.fill(angles, adjusted_values, color=color, alpha=0.5)
-#         i-=1
-#     canvas.draw()
-#     # window.after(5, updateplot, q)
-#     # else:
-#     #     print('done')
-#     # except:
-#     #     print("empty")
-#     #     self.window.after(500, updateplot, q)
+# TODO: maybe add animation with multiprocesing
 
 class Radar():
     """
     Interactive Radar plot class to choose parameters to create playlists
     """
+
     def __init__(self):
+        """
+        Initialize the Radar class with Spotify credentials as well as database
+        """
         self.__db_cr = Credentials.get_database_credentials()
         self.__db_id = self.__db_cr['id']
         self.__db_password = self.__db_cr['password']
         self.__db_name = self.__db_cr["db_name"]
         self.__spotify_cr = Credentials.get_spotify_credentials()
-        if len(self.__spotify_cr['username']) == 0 or len(self.__spotify_cr['client_id']) == 0 or len(self.__spotify_cr['client_secret']) == 0:
-            print("Warning, Spotify credentials not found, will skip it")
-        self.client = APIClient([self.__spotify_cr['username']], [self.__spotify_cr['client_id']],
-            [self.__spotify_cr['client_secret']])
+        if len(self.__spotify_cr['username']) == 0 or \
+            len(self.__spotify_cr['client_id']) == 0 or \
+                len(self.__spotify_cr['client_secret']) == 0:
+                    print("Warning, Spotify credentials not found, will skip it")
+        self.client = APIClient([self.__spotify_cr['username']],
+                                [self.__spotify_cr['client_id']],
+                                [self.__spotify_cr['client_secret']])
         self.db = Database(self.__db_id, self.__db_password, self.__db_name)
         self.columns = [column[0] for column in self.db.get_column_names()]
+        # TODO: maybe currently playing later
         self.currently_playing = self.client.get_current_track()
-        # features = self.db.retrieve_feature(self.currently_playing['item']['id'])
 
     def build_frame(self, window: ttk.Frame, bg_string:str, fg_string:str):
         """
-        Build the frame of the GUI
+        Build the frame of the GUI for the Radar plot
+
+        :param window: the Frame of the Window
+        :type window: ttk.Frame
+        :param bg_string: the background color
+        :type bg_string: str
+        :param fg_string: the foreground color
+        :type fg_string: str
         """
         self.window = window
         self.move_flag = False
@@ -100,15 +91,15 @@ class Radar():
         url = "https://open.spotify.com/?"
         font= ('Aerial', '16', 'underline')
         side = "top"
-        add_website_link(self.window, url, text, font, side, fg = self.fg_string, bg = self.bg_string)
+        add_website_link(self.window, url, text, font, side,
+                         fg = self.fg_string, bg = self.bg_string)
 
         # # Test of some genres analysis
         # self.analyze_artists()
 
         # features that we get from the database and that we're most interested in
-        self.cols = ['acousticness', 'energy', 'danceability', 'valence',
-                     'liveness', 'speechiness', 'instrumentalness', 'loudness',
-                     'tempo']
+        self.cols = ['acousticness', 'energy', 'danceability', 'valence', 'liveness',
+                     'speechiness', 'instrumentalness', 'loudness', 'tempo']
 
         # the limits are taken based on the stats of the spotify features database,
         # maybe automate this with only min and max to search through the db
@@ -131,12 +122,8 @@ class Radar():
                    speechiness, instrumentalness, loudness, tempo]
         self.angles += self.angles[:1]
         self.values += self.values[:1]
-        # n = math.ceil(len(self.values)/3)
-        # label_frames = []
-        # for _ in range(n):
-        #     label_frame =  ttk.Frame(self.window)
-        #     label_frame.pack(side='top', anchor='c', fill='both', expand=True)
-        #     label_frames.append(label_frame)
+
+        # Display the labels of the features and their values on the GUI
         label_frame = ttk.Frame(self.window)
         label_frame.pack(side='top', anchor='c', fill='both', expand=True)
         label_frame.grid_columnconfigure(tuple(range(3)), weight=1)
@@ -146,57 +133,32 @@ class Radar():
         # Initialize the violin plots to show the distribution of the data
         self.violin_pos, self.violin_neg = None, None
 
-        # let's make a spotify player to play songs
+        # Initialize the spotify player to play songs
         spotify_player_frame = ttk.Frame(self.window)
         spotify_player_frame.pack(side='bottom', anchor='c', fill='both', expand=True)
-        self.spotify_player = SpotifyPlayer(spotify_player_frame, self.update_monitor, self.__spotify_cr, self.fg_string, self.bg_string)
+        self.spotify_player = SpotifyPlayer(spotify_player_frame,
+                                            self.update_monitor,
+                                            self.__spotify_cr,
+                                            self.fg_string,
+                                            self.bg_string)
 
     def update_monitor(self, action: str):
-        # self.monitor.
+        """
+        Update the monitor based on the action that was performed on SpotifyPlayer
+
+        :param action: the action name
+        :type action: str
+        """
         if action == "pause":
             # remove the plot
             self.playing[0].remove()
         else:
-            # self.change_value()
             self.change_song()
-
-    # def analyze_artists(self) -> None:
-    #     """
-    #     Test to analyze artists and their genres
-    #     """
-    #     # get the artists from the database
-    #     artists = self.db.get_artists()
-    #     columns = [column[0] for column in self.db.get_column_names_artists()]
-    #     # create a dataframe with columns and values with artists
-    #     df = pd.DataFrame(artists, columns = columns)
-    #     # count genres and sort by count
-    #     word_list = []
-    #     for word in df['genres']:
-    #         word = word.replace("}", "")
-    #         word = word.replace("{", "")
-    #         word = word.replace('"', "")
-    #         # print(word)
-    #         # words = word.split("[\\s,]")
-    #         words = word.split(",")
-    #         # print(words)
-    #         # for word in words:
-    #         #     word = word.split(" ")
-    #         #     word_list.extend(word)
-    #         word_list.extend(words)
-    #     # make a single string from the list
-    #     word_list = " ".join(word_list)
-    #     wordcloud = WordCloud().generate(word_list)
-    #     plt.imshow(wordcloud, interpolation='bilinear')
-    #     plt.axis("off")
-    #     plt.show()
-    #     print("OE")
 
     def add_playlist_buttons(self):
         """
         Add buttons to the GUI to display some playlists and update graph accordingly
         """
-        # add a button for each playlist
-        # Show examples of playlists' distributions
         playlist_frame = ttk.Frame(self.window)
         playlist_frame.pack(side='top', anchor='c', fill='both', expand=True)
         try:
@@ -205,32 +167,32 @@ class Radar():
         except FileNotFoundError:
             with open(os.path.join(sys.path[-1], "Playlists/playlists.json"), "r") as file:
                 playlists = json.load(file)
-        # for key, value in playlists.items():
-        #     show_playlist
-        # current_table = ttk.StringVar() # create variable for table
-        # combo = ttk.Combobox(playlist_frame, values = list(playlists.keys()))
-        # self.config
-        # # (playlist_frame, text = key, command = lambda value=value: self.show_playlist(value))
-        # button.pack(side = ttk.LEFT)
 
         def update_second_table(self):
+            """
+            Update the second Table DropDown based on the first one
+            """
             second_table.config(values=["ALL"]+list(playlists[first_table.current_table.get()].keys()))
             second_table.current(0)
-            print(first_table.current_table.get())
-            print(second_table.current_table.get())
 
+        # Build the 2 table with the playlists
         text_font=('Aerial', 16)
-        first_table = TableDropDown(playlist_frame, list(playlists.keys()), font=text_font)
+        first_table = TableDropDown(playlist_frame,
+                                    list(playlists.keys()),
+                                    font=text_font)
         playlist_frame.option_add('*TCombobox*Listbox.font', text_font)
         first_table.pack(side="left", anchor = 'c',fill='both', expand=True)
-        second_table = TableDropDown(playlist_frame, ["ALL"]+list(playlists[first_table.current_table.get()].keys()), font=text_font)
+        second_table = TableDropDown(playlist_frame,
+                                     ["ALL"]+list(playlists[first_table.current_table.get()].keys()),
+                                     font=text_font)
         playlist_frame.option_add('*TCombobox*Listbox.font', text_font)
         second_table.pack(side="left", anchor = 'c',fill='both', expand=True)
         first_table.bind("<<ComboboxSelected>>", update_second_table)
 
-        def print_value():
-            print(first_table.current_table.get())
-            print(second_table.current_table.get())
+        def show_value():
+            """
+            Show the values of the playlist on the graph
+            """
             playlist_names = list(playlists[first_table.current_table.get()].keys())
             playlist_name = second_table.current_table.get()
             if playlist_name != "ALL":
@@ -238,45 +200,45 @@ class Radar():
             self.show_playlist(playlist_names)
 
         def play_value():
-            print(first_table.current_table.get())
-            print(second_table.current_table.get())
-            playlist_names = list(playlists[first_table.current_table.get()].keys())
+            """
+            Play the playlist selected on spotify
+            """
             playlist_name = second_table.current_table.get()
             if playlist_name != "ALL":
-                playlist_names = [playlist_name]
-            self.play_playlist(playlist_names)
-            self.change_song()
+                self.play_playlist(playlist_name)
+                self.change_song()
+            else:
+                tk.messagebox.showerror("Error",
+                                        "You cannot play ALL playlists from a category")
 
-        b = ttk.Button(playlist_frame, text='Show playlist', command = print_value,
+        b = ttk.Button(playlist_frame, text='Show playlist', command = show_value,
                        style='my.TButton')
         b.pack(side = "left", anchor = 'c',fill='both', expand=True)
         b = ttk.Button(playlist_frame, text='Play playlist', command = play_value,
                        style='my.TButton')
         b.pack(side = "left", anchor = 'c',fill='both', expand=True)
 
-    def play_playlist(self, playlist_names: List[str]):
+    def play_playlist(self, playlist_name: str):
         """
         Play the playlist on spotify
+
+        :param playlist_names: the name of the playlist
+        :type playlist_names: str
         """
-        pl = self.db.get_playlist(playlist_names[0]) # pl['uri']
+        pl = self.db.get_playlist(playlist_name) # pl['uri']
         self.client.play_playlist(pl[0][0])
 
     def show_playlist(self, playlist_names: List[str]):
         """
         Update graph based on playlist stats found in the db
+
+        :param playlist_names: the name of the playlists to show stats
+        :type playlist_names: List[str]
         """
-        print(playlist_names)
-        tracks_features = {
-                'acousticness': [],
-                'energy': [],
-                'danceability': [],
-                'valence': [],
-                'liveness': [],
-                'speechiness': [],
-                'instrumentalness': [],
-                'loudness': [],
-                'tempo': []
-            }
+        # Retrieve the different features of each of the playlists and store them
+        tracks_features = {}
+        for col in self.cols:
+            tracks_features[col] = []
         for playlist_name in playlist_names:
             try:
                 playlist_tracks = self.db.get_playlist_tracks(playlist_name)
@@ -289,8 +251,7 @@ class Radar():
                         tracks_features[key].append(track_features[self.columns.index(key)])
                 except IndexError:
                     pass
-                # tracks_features.append(track_features)
-            # print(tracks_features)
+        # create a DataFrame from the results and show the histograms of statistics
         df = pd.DataFrame.from_dict(tracks_features)
         for i, col in enumerate(self.cols):
             try:
@@ -298,16 +259,16 @@ class Radar():
             except ValueError:
                 print("Playlist not found")
                 return
-            # violin_pos.set_alpha(0.5)
-            # violin_neg.set_alpha(0.5)
             self.violins[i] = [violin_pos, violin_neg]
             self.show_histogram(i)
         self.canvas.draw()
-        print("updating")
 
-    def display_labels(self, window = ttk.Frame) -> None:
+    def display_labels(self, window: ttk.Frame):
         """
         Display the labels of the variables on the GUI
+
+        :param window: the frame to display labels on
+        :type window: ttk.Frame
         """
         self.labels = []
         for i in range(len(self.cols)):
@@ -315,18 +276,11 @@ class Radar():
             # part of the window, each one down the other
             text = tk.StringVar()
             text.set(self.cols[i]+": "+ str(self.values[i]))
-            # label = ttk.Label(window[i//3], text = text.get(), font=("Arial",14))
             label = ttk.Label(window, text = text.get(), font=("Arial",14))
-            # increase size of label text
-            # label.config(font=("Arial", 12), background='white')
-            # TODO: change and place closer to the graph's axes
-            # label.place(x = 20, y = 60 + 60 * i)
-            # label.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
             label.grid(row=i//3, column=i%3, sticky="nsew")
-            # label.place(anchor='center', relx =i//3*0.5, rely=i%3*0.3)
             self.labels.append(label)
 
-    def change_value(self, i: int) -> None:
+    def change_value(self, i: int):
         """
         Change the value of the variable at index i on the GUI
 
@@ -336,7 +290,7 @@ class Radar():
         self.values[i] = round_point_00_2(self.values[i])
         self.labels[i].configure(text = self.cols[i]+": "+str(self.values[i]))
 
-    def update_plot_line(self) -> None:
+    def update_plot_line(self):
         """
         Updates the plot fill lines based on the placement of points
         """
@@ -350,14 +304,15 @@ class Radar():
 
         :param canvas: the Canvas where the figure is
         :type canvas: Canvas
-        :return: _description_
+        :return: The Draggable points for each axes
         :rtype: List[DraggablePoint]
         """
         points = []
         for i in range(len(self.angles)):
             # add self to you can pass a reference to the Graph instance to
             # the Point class when you create the points
-            point = DraggablePoint(self, canvas, self.ax, self.angles, self.values, i, _from_rgb(self.color_palette[-1]))
+            point = DraggablePoint(self, canvas, self.ax, self.angles,
+                                   self.values, i, _from_rgb(self.color_palette[-1]))
             points.append(point)
         return points
 
@@ -383,18 +338,11 @@ class Radar():
         self.violins[i][0].set_alpha(0)
         self.violins[i][1].set_alpha(0)
         self.canvas.draw()
-        # self.violin_pos.remove()
-        # self.violin_neg.remove()
-        # self.violin_pos.set_visible(False)
-        # self.violin_pos.set_visible(False)
-        # [p.remove() for p in reversed(self.ax.patches)]
-        # self.ax.clear() # this removes all
 
     def plot_radar(self):
         """
         Plot the Radar graph on the GUI
         """
-
         fig, (self.ax) = plt.subplots(1, 1, figsize = (7, 7),
                                       subplot_kw=dict(polar=True))
 
@@ -432,11 +380,13 @@ class Radar():
 
         # if something is playing, aso show on the graph
         if self.currently_playing:
-        # def plot():
             self.update_plot()
 
         points = self.create_draggable_points(self.canvas)
-        self.area = self.ax.fill(self.angles, self.values, color=_from_rgb(self.color_palette[0]), alpha=0.7)
+        self.area = self.ax.fill(self.angles,
+                                 self.values,
+                                 color=_from_rgb(self.color_palette[0]),
+                                 alpha=0.7)
 
         # add a button to create a playlist
         self.button = ttk.Button(self.window, text = "Create Playlist",
@@ -444,94 +394,48 @@ class Radar():
                                  style='my.TButton')
         self.button.pack(side = tk.BOTTOM)
 
-        # def anim(q):
-        #     def update(i):
-        #         self.playing[0].remove()
-        #         if i%2==0:
-        #             print("pair")
-        #             animated_values = [max(0, val -0.5) for val in adjusted_values]
-        #             self.playing = self.ax.fill(self.angles, animated_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
-        #             self.canvas.draw()
-        #         else:
-        #             print("impair")
-        #             self.playing = self.ax.fill(self.angles, adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
-        #             self.canvas.draw()
-        #         return self.playing
-        #     print("anim")
-        #     print(fig, update, self.tempo)
-        #     ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=self.tempo, blit=False)
-        #     print(ani, fig, update, self.tempo)
-        #     return ani
-        # print("anim")
-        # def update():
-        #     # print("update")
-        #     self.playing[0].remove()
-        #     if self.i==0:
-        #         # print("pair")
-        #         animated_values = [max(0, val -0.5) for val in self.adjusted_values]
-        #         self.playing = self.ax.fill(self.angles, animated_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
-        #         self.canvas.draw()
-        #         self.i+=1
-        #     else:
-        #         # print("impair")
-        #         self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.5)
-        #         self.canvas.draw()
-        #         self.i-=1
-            # ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=1, blit=False)
-            # self.window.update()
-        # if self.currently_playing:
-        #     self.event = threading.Event()
-        #     self.anim_thread = threading.Thread(target=anim, args=(self.event,))
-        #     self.anim_thread.daemon = True
-        #     self.anim_thread.start()
-        #     # ani = animation.FuncAnimation(fig, update, np.arange(1, 200), interval=1, blit=False)
-        # def threading_():
-        #     # t1=threading.Thread(target=anim)
-        #     # t1.start()
-        #     color = _from_rgb(self.color_palette[2])
-        #     q = multiprocessing.Queue()
-        #     p = multiprocessing.Process(target=updateplot, args=(q, self.playing, self.adjusted_values, self.angles, self.ax, self.canvas, color, self.i,))
-        #     p.start()
-        #     # plot()
-        #     # updateplot(q)
-        # self.button = ttk.Button(self.window, text = "Animate",
-        #                          command = update,
-        #                          style='my.TButton')
-        # self.button.pack(side = tk.BOTTOM)
         if self.currently_playing:
             self.event = threading.Event()
-            self.submit_thread = threading.Thread(target=self.show_song, args=(self.event,))
+            self.submit_thread = threading.Thread(target=self.show_song,
+                                                  args=(self.event,))
             self.submit_thread.daemon = True
             self.submit_thread.start()
 
         self.window.mainloop()
 
-    def change_song(self):
-        print("change the song")
+    def change_song(self, schedule: sched=None):
+        """
+        Update the Monitor with the song that is now playing
+
+        :param schedule: needed when callback, defaults to None
+        :type schedule: sched, optional
+        """
         time.sleep(2)
         self.currently_playing = self.client.get_current_track()
-        print(self.currently_playing['item']['name'])
         time_rest = round(self.currently_playing['item']['duration_ms']/1000)
         try:
             self.monitor.new_song(time_rest)
         except AttributeError:
             self.monitor = Monitor(time_rest, self.change_song)
             self.monitor.new_song(time_rest)
-        # scheduler.enter(round(self.currently_playing['item']['duration_ms']/1000), 1, change_song, (scheduler,))
         self.update_plot()
-        # self.monitor.schedule.run()
 
-    def show_song(self, event):
-        time_rest = round((self.currently_playing['item']['duration_ms']-self.currently_playing['progress_ms'])/1000)
-        print(time_rest)
+    def show_song(self, event: tk.Event):
+        """
+        Show a song features values on the plot
+
+        :param event: _description_
+        :type event: tk.Event
+        """
+        time_rest = round((self.currently_playing['item']['duration_ms']-\
+            self.currently_playing['progress_ms'])/1000)
         self.monitor = Monitor(time_rest, self.change_song)
         self.monitor.schedule.run()
-        # my_scheduler = sched.scheduler(time.time, time.sleep)
-        # my_scheduler.enter(self.time_rest-16, 1, change_song, (my_scheduler,))
-        # my_scheduler.run()
 
     def update_plot(self):
-        print("udpate plot")
+        """
+        Update Radar's plot based on the new features
+        """
         try:
             self.playing[0].remove()
         except AttributeError:
@@ -551,9 +455,6 @@ class Radar():
         self.adjusted_values = []
         for i, name in enumerate(self.cols):
             index = self.columns.index(name)
-            # if name == "tempo":
-            #     # tempo is in beat/minute, we want to convert it to milliseconds
-            #     self.tempo = round(1/(values[0][11]/(60*1000)))
             value = (values[0][index]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
             self.adjusted_values.append(value)
         self.adjusted_values += self.adjusted_values[:1]
@@ -612,7 +513,7 @@ class Radar():
 
         return violin_pos, violin_neg
 
-    def create_playlist(self) -> None:
+    def create_playlist(self):
         """
         Creates a playlists based on the songs found in the database
         """
@@ -644,17 +545,6 @@ class Radar():
         songs = [song[0] for song in songs]
         print(f"We have in total: {len(songs)} songs.")
         songs = np.random.choice(songs, 20, replace=False)
-        # songs = []
-        # criteria = 20<=len(songs)<=50
-        # while not criteria:
-        #     songs = db.get_songs(self.cols, values, boundaries)
-        #     print(len(songs))
-        #     if len(songs)>=100:
-        #         factor = 0.75
-        #     elif len(songs)<20:
-        #         factor = 2
-        #     else: return songs
-        #     boundaries = self.modify_boundaries(boundaries, factor)
         return songs
 
     def modify_boundaries(self, boundaries: List[float],
@@ -663,11 +553,11 @@ class Radar():
         Modify the boundaries of the variables to search for more songs in the
         database
 
-        :param boundaries: _description_
+        :param boundaries: the boundaries of the variables
         :type boundaries: List[float]
-        :param factor: _description_
+        :param factor: how much we want to modify the boundaries
         :type factor: int
-        :return: _description_
+        :return: the list of boundaries modified
         :rtype: List[float]
         """
         boundaries = [boundary*factor for boundary in boundaries]
@@ -694,20 +584,26 @@ class Radar():
         return values, boundaries
 
 class TableDropDown(ttk.Combobox):
-    def __init__(self, parent, values, font):
+    """
+    Class to handle the DropDown table for playlists
+
+    Inherited from ttk.Combobox
+    """
+    def __init__(self, parent: ttk.Frame, values: List[str], font: Tuple[str, int]):
+        """
+        Initialize the TableDropDown class
+
+        :param parent: the frame where to put the DropDown box
+        :type parent: ttk.Frame
+        :param values: The values to write inside the box
+        :type values: List[str]
+        :param font: the font name and size
+        :type font: Tuple[str, int]
+        """
         self.current_table = tk.StringVar() # create variable for table
         ttk.Combobox.__init__(self, parent, font=font)#  init widget
-        self.config(textvariable = self.current_table, state = "readonly", values = values)
+        self.config(textvariable = self.current_table,
+                    state = "readonly",
+                    values = values)
         self.current(0) # index of values for current table
         self.pack(side="left") # place drop down box
-        # print(self.current_table.get())
-
-# def simulation(q):
-#     print("simulation")
-#     iterations = range(100)
-#     for i in iterations:
-#         if not i % 10:
-#             time.sleep(1)
-#                 #here send any data you want to send to the other process, can be any pickable object
-#             q.put(random.randint(1,10))
-#     q.put('Q')

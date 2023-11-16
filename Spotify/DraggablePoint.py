@@ -44,7 +44,8 @@ class DraggablePoint():
         # Data coordinate is polar -> x = angle, y = r
         self.x = angles[self.i]
         self.y = values[self.i]
-        self.point, = ax.plot(self.x, self.y, 'o', color = color, markersize=radius*400, alpha=0.7, picker=5)
+        self.point, = ax.plot(self.x, self.y, 'o', color = color,
+                              markersize=radius*400, alpha=0.7, picker=5)
         self.angles = angles
         self.values = values
         self.radius = radius

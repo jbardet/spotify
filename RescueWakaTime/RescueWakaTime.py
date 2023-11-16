@@ -18,27 +18,20 @@ from rauth import OAuth2Service
 from urllib.parse import parse_qsl
 from datetime import timedelta as td
 import tkinter.ttk as ttk
+import matplotlib
 
 from Helpers.helpers import add_website_link, set_plot_color
 from Credentials.Credentials import Credentials
 from Configs.Parser import Parser
 
-# TODO: change date in the API calls to today's date from last week? or only today?
-# TODO: add a connection to a database to save results (or on disk might be easier)
-
 class RescueWakaTime():
     """
     Integrate a Rescue time window to see your daily activity
     """
-    def __init__(self) -> None:
-        """
-        Initialize the RescueTime class from the API key and the GUI window
-        where to place it
 
-        :param key: the user key to access the API
-        :type key: str
-        :param window: the window where to place the RescueTime widget
-        :type window: ttk.Frame
+    def __init__(self):
+        """
+        Initialize the RescueTime class from the API key
         """
         self.__rescue_key = Credentials.get_rescuetime_credentials()
         self.__waka_key = Credentials.get_wakatime_credentials()
@@ -62,15 +55,30 @@ class RescueWakaTime():
             self.status_call = "https://wakatime.com/api/v1/users/current/status_bar/today?api_key="+self.__waka_key
             self.status_bar = self.get_status_bar()
 
-    def get_status_bar(self):
+    def get_status_bar(self) -> dict:
+        """
+        Get the status bar from WakaTime
+
+        :return: the result from the API
+        :rtype: _type_
+        """
         response = requests.get(self.status_call)
         return response.json()
 
-    def get_data_activity(self):
+    def get_data_activity(self) -> dict:
+        """
+        Get the status bar from RescueTime
+
+        :return: the result from the API
+        :rtype: dict
+        """
         response = requests.get(self.activity_call)
         return response.json()
 
     def update_analytics(self):
+        """
+        Update the plots on the GUI based on daily advances
+        """
         self.data_activity = self.get_data_activity()
         self.status_bar = self.get_status_bar()
         for widget in self.window.winfo_children():
@@ -78,13 +86,238 @@ class RescueWakaTime():
         self.add_analytics()
 
     def build_frame(self, window: ttk.Frame, bg_string: str, fg_string: str):
+        """
+        Build the frame for the RescueTime window
+
+        :param window: the Frame of the Window
+        :type window: ttk.Frame
+        :param bg_string: the background color
+        :type bg_string: str
+        :param fg_string: the foreground color
+        :type fg_string: str
+        """
         self.window = window
         self.bg_string = bg_string
         self.fg_string = fg_string
-        # self.color_palette = self.create_color_palette()
         self.color_theme = Parser.get_plt_theme()
         self.color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 7))[1:-1]
         self.color_palette = np.flip(self.color_palette, 0)
+        self.bigfigsize = (5, 4)
+        self.smallfigsize = (5, 2)
+
+    def add_analytics(self):
+        """
+        Add RescueTime analytics to the left part of the main GUI
+
+        We add:
+        - a link to RescueTime's website to have a more in-depth analysis and
+            add offline times
+        - a horizontal bar chart of the productivity rank [-2,2]
+        - a vertical bar chart with category and productivity (color)
+        """
+
+        link_frame = ttk.Frame(self.window)
+        link_frame.pack(side='top', anchor='c', fill='both', expand=True)
+
+        text = "RescueTime"
+        url = "https://www.rescuetime.com/rtx/reports/activities"
+        side = "left"
+        self.add_website_link(link_frame, text, url, side)
+
+        text = "Wakatime"
+        url = "https://wakatime.com/dashboard"
+        side = "right"
+        self.add_website_link(link_frame, text, url, side)
+
+        # TODO: Also add a button either to oy.system to open RescueTime app
+        # to add offline work or make a widget to add offline work
+
+        self.add_analytics_plots()
+        # self.add_start_rescue_time_button()
+
+    def add_website_link(self, window: ttk.Frame, text: str, url: str, side: str):
+        """
+        Add a label to access the RescueTime website for analytics
+
+        :param window: the frame to place the links
+        :type window: ttk.Frame
+        :param text: the text to display
+        :type text: str
+        :param url: the link to be clicked
+        :type url: str
+        :param side: the side to place the label
+        :type side: str
+        """
+        font = ('Aerial', '16', 'underline')
+        add_website_link(window, url, text, font, side, fg=self.fg_string, bg=self.bg_string)
+
+    def add_analytics_plots(self) -> None:
+        """
+        Make the analytics plots for some motivation and add to the GUI
+        """
+        # self.data_activity['row_headers'] are:
+        #  ['Rank', 'Time Spent (seconds)', 'Number of People', 'Activity', 'Category', 'Productivity']
+        columns = ['rank', 'time', 'people', 'activity', 'category', 'productivity']
+        try:
+            df = pd.DataFrame(self.data_activity['rows'], columns = columns)
+        except KeyError:
+            df = pd.DataFrame(self.data_activity, columns = columns)
+        # Add the plots based on the activites
+        self.add_ranked_plot(df.groupby("productivity").sum()['time'])
+        self.add_categorical_plot(df)
+        # if we don't provide a WakaTime key, it means we don't want to connect to
+        # WakaTime, thus we only plot RescueTime data
+        if len(self.__waka_key) == 0:
+            self.add_activity_plot(df)
+        else:
+            self.add_wakatime_plot(df)
+
+    def add_wakatime_plot(self, df: pd.DataFrame):
+        """
+        Adds the WakaTime plot to the Frame
+
+        :param df: the DataFrame with RescueTime's data
+        :type df: pd.DataFrame
+        """
+        # status bar: ['grand_total', 'range', 'projects', 'languages',
+        # 'dependencies', 'machines', 'editors', 'operating_systems', 'categories']
+
+        # here rt means RescueTime, wt WakaTime
+        rt_tot_time = df['time'].sum()/3600
+        try:
+            rt_prod_time = df.groupby('productivity').sum()['time'][2]/3600
+        except IndexError:
+            rt_prod_time = 0
+        try:
+            rt_vs_time = df.groupby('activity').sum()['time']['Visual Studio Code']/3600
+        except KeyError:
+            rt_vs_time = 0
+        try:
+            total_today = self.status_bar['data']['grand_total']['decimal']
+            categories = self.status_bar['data']['categories']
+        except KeyError:
+            total_today = 0
+            categories = []
+        # Make the plot and add it to the GUI window
+        self.create_barplot(["RT_tot", "RT_prod", "RT_VS", "WT_tot"] + [cat['name'] for cat in categories],
+                            [rt_tot_time, rt_prod_time, rt_vs_time,
+                            float(total_today)] + [float(cat['decimal']) for cat in categories],
+                            plt.get_cmap(self.color_theme)(np.linspace(0, 1, 8))[1:-1],
+                            title="Time analysis",
+                            ylabel="Time (hours)")
+
+    def create_barplot(self,
+                       labels: List[str],
+                       values: List[float],
+                       colors: List[str],
+                       title: str,
+                       ylabel: str):
+        """
+        Creates the vertical barplots for RescueTime's different datas
+
+        :param labels: the labels to display on the x-axis
+        :type labels: List[str]
+        :param values: the values of the different bars
+        :type values: List[float]
+        :param colors: the colors of the bars based on productivity levels
+        :type colors: List[str]
+        :param title: the title of the graph
+        :type title: str
+        :param ylabel: the label of the y-axis
+        :type ylabel: str
+        """
+        fig, (ax) = plt.subplots(1, 1, figsize=self.bigfigsize)
+        plt.title(title)
+        plt.ylabel(ylabel)
+        plt.bar(labels, values, color=colors)
+        # Add angle to the labels to see all labels entirely
+        plt.xticks(rotation=45, ha='right')
+        self.create_plot(fig, ax)
+
+    def create_plot(self, fig: matplotlib.figure, ax: matplotlib.axes.Axes):
+        """
+        Creates a Canvas from a matplotlib figure and axis object
+
+        :param fig: the figure to display
+        :type fig: matplotlib.figure
+        :param ax: the axes of the figure to display
+        :type ax: matplotlib.axes.Axes
+        """
+        plt.tight_layout()
+        fig, ax = set_plot_color(fig, ax, self.fg_string)
+        canvas = FigureCanvasTkAgg(fig, master = self.window)
+        canvas_widget = canvas.get_tk_widget()
+        canvas.get_tk_widget().config(bg=self.bg_string)
+        canvas_widget.pack(side = tk.TOP)
+
+    def add_activity_plot(self, df: pd.DataFrame):
+        """
+        Adds an Activity plot based on RescueTime's activities
+
+        :param df: RescueTime's activities
+        :type df: pd.DataFrame
+        """
+        # Make a vertical bar chart with the category and productivity score
+        # Sort the Serie by value and only show the 10 biggest categories on the plot
+        top_ten = df.groupby("activity").sum()['time'].sort_values(ascending=False)[:10]
+        plot_colors = [self.color_palette[2-df[df['activity'] ==cat]['productivity'].iloc[0]]
+                       for cat in top_ten.keys()]
+
+        # Make the plot and add it to the GUI window
+        self.create_barplot(get_labels(top_ten.keys(), 18),
+                            top_ten.values/3600,
+                            plot_colors,
+                            title="Activities",
+                            ylabel="Time (hours)")
+
+    def add_ranked_plot(self, rank: pd.Series):
+        """
+        Make the ranked plot and add to the GUI
+
+        :param rank: _description_
+        :type rank: pd.Series
+        """
+
+        # Make a horizontal bar chart with the productivity score [-2,2] and
+        # the time spent in hours
+        data_to_plot = [[] for _ in range(5)]
+        for key, value in rank.items():
+            data_to_plot[2-key] = [key, value]
+        for i, sublist in enumerate(data_to_plot):
+            if len(sublist)<2:
+                data_to_plot[i] = [2-i, 0]
+
+        # Make the plot and add it to the GUI window
+        fig, (ax) = plt.subplots(1, 1, figsize=self.smallfigsize)
+        plt.title("Productivity (2 most productive, -2 most distracting))")
+        plt.xlabel("Time (hours)")
+        plt.barh(np.array(data_to_plot)[:,0],
+                np.array(data_to_plot)[:,1]/3600,
+                color=self.color_palette)
+        self.create_plot(fig, ax)
+
+    def add_categorical_plot(self, df: pd.DataFrame) -> None:
+        """
+        Make the categorical plot about RescueTime's categories of work and add
+        to the GUI
+
+        :param df: the DataFrame with RescueTime's data
+        :type df: pd.DataFrame
+        """
+
+        # # Make a vertical bar chart with the category and productivity score
+        # # Sort the Serie by value and only show the 10 biggest categories on the plot
+        top_ten = df.groupby("category").sum()['time'].sort_values(ascending=False)[:10]
+        plot_colors = [self.color_palette[2-df[df['category'] ==cat]['productivity'].iloc[0]]
+                       for cat in top_ten.keys()]
+
+        # Make the plot and add it to the GUI window
+        self.create_barplot(get_labels(top_ten.keys(), 18),
+                            top_ten.values/3600,
+                            [self.color_palette[2-df[df['category'] ==cat]['productivity'].iloc[0]]
+                             for cat in top_ten.keys()],
+                            "Categories",
+                            "Time (hours)")
 
     def save_data(self):
         """
@@ -532,208 +765,6 @@ class RescueWakaTime():
         heartbeats_added = heartbeats_added_copy
         durations.to_csv('data/wakatime_durations.csv')
         heartbeats.to_csv('data/wakatime_heartbeats.csv')
-        print("oe")
-
-    # def is_rescue_time_on(self) -> bool:
-    #     """
-    #     Make a request to the API to see if the RescueTime app is on already
-    #     and stop it otherwise
-
-    #     :return: False because if RescueTime is on, we want to stop it
-    #     :rtype: bool
-    #     """
-    #     requests.get(self.end_call)
-    #     return False
-
-    # def create_color_palette(self) -> List[Color]:
-    #     """
-    #     Create a color palette from green (productive) to red (distracting)
-
-    #     :return: a list of colors
-    #     :rtype: List[Color]
-    #     """
-    #     red = Color("green")
-    #     colors = list(red.range_to(Color("red"),5))
-    #     colors = [col.hex for col in colors]
-    #     return colors
-
-    def add_analytics(self) -> None:
-        """
-        Add RescueTime analytics to the left part of the main GUI
-
-        We add:
-        - a link to RescueTime's website to have a more in-depth analysis and
-            add offline times
-        - a horizontal bar chart of the productivity rank [-2,2]
-        - a vertical bar chart with category and productivity (color)
-        - a button to turn on/off RescueTime when going on a break
-        """
-
-        link_frame = ttk.Frame(self.window)
-        link_frame.pack(side='top', anchor='c', fill='both', expand=True)
-
-        text = "RescueTime"
-        url = "https://www.rescuetime.com/rtx/reports/activities"
-        side = "left"
-        self.add_website_link(link_frame, text, url, side)
-
-        text = "Wakatime"
-        url = "https://wakatime.com/dashboard"
-        side = "right"
-        self.add_website_link(link_frame, text, url, side)
-
-        # TODO: Also add a button either to oy.system to open RescueTime app
-        # to add offline work or make a widget to add offline work
-
-        self.add_analytics_plots()
-        # self.add_start_rescue_time_button()
-
-        # self.add_wakatime_plot()
-
-    def add_wakatime_plot(self, df: pd.DataFrame) -> None:
-        # status bar: ['grand_total', 'range', 'projects', 'languages', 'dependencies', 'machines', 'editors', 'operating_systems', 'categories']
-        rt_tot_time = df['time'].sum()/3600
-        try:
-            rt_prod_time = df.groupby('productivity').sum()['time'][2]/3600
-        except IndexError:
-            rt_prod_time = 0
-        try:
-            rt_vs_time = df.groupby('activity').sum()['time']['Visual Studio Code']/3600
-        except KeyError:
-            rt_vs_time = 0
-        try:
-            total_today = self.status_bar['data']['grand_total']['decimal']
-            categories = self.status_bar['data']['categories']
-        except KeyError:
-            total_today = 0
-            categories = []
-        # Make the plot and add it to the GUI window
-        fig, (self.ax) = plt.subplots(1, 1, figsize=(5,4))
-        plt.title("Time analysis")
-        plt.ylabel("Time (hours)")
-        labels = ["RT_tot", "RT_prod", "RT_VS", "WT_tot"] + [cat['name'] for cat in categories]
-        values = [rt_tot_time, rt_prod_time, rt_vs_time, float(total_today)] + [float(cat['decimal']) for cat in categories]
-        color_palette = plt.get_cmap(self.color_theme)(np.linspace(0, 1, 8))[1:-1]
-        plt.bar(labels, values, color=color_palette)
-        # Add angle to the labels to see all labels entirely
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
-        canvas = FigureCanvasTkAgg(fig, master = self.window)
-        canvas_widget = canvas.get_tk_widget()
-        canvas.get_tk_widget().config(bg=self.bg_string)
-        canvas_widget.pack(side = tk.TOP)
-
-    def add_website_link(self, window: ttk.Frame, text: str, url: str, side: str) -> None:
-        """
-        Add a label to access the RescueTime website for analytics
-
-        :param text: the text to display
-        :type text: str
-        :param url: the link to be clicked
-        :type url: str
-        """
-        font = ('Aerial', '16', 'underline')
-        add_website_link(window, url, text, font, side, fg=self.fg_string, bg=self.bg_string)
-
-    def add_analytics_plots(self) -> None:
-        """
-        Make the analytics plots for some motivation and add to the GUI
-        """
-        columns = ['rank', 'time', 'people', 'activity', 'category', 'productivity']
-        try:
-            df = pd.DataFrame(self.data_activity['rows'], columns = columns)
-        except KeyError:
-            df = pd.DataFrame(self.data_activity, columns = columns)
-        self.add_ranked_plot(df.groupby("productivity").sum()['time'])
-        self.add_categorical_plot(df)
-        if len(self.__waka_key) == 0:
-            self.add_activity_plot(df)
-        else:
-            self.add_wakatime_plot(df)
-
-    def add_activity_plot(self, df: pd.DataFrame) -> None:
-        # print(data_activity)
-        # # Make a vertical bar chart with the category and productivity score
-        # # Sort the Serie by value and only show the 10 biggest categories on the plot
-        top_ten = df.groupby("activity").sum()['time'].sort_values(ascending=False)[:10]
-        plot_colors = [self.color_palette[2-df[df['activity'] ==cat]['productivity'].iloc[0]]
-                       for cat in top_ten.keys()]
-
-        # Make the plot and add it to the GUI window
-        fig, (self.ax) = plt.subplots(1, 1, figsize=(5,4))
-        labels = get_labels(top_ten.keys(), 18)
-        plt.title("Activities")
-        plt.ylabel("Time (hours)")
-        plt.bar(labels, top_ten.values/3600, color=plot_colors)
-        # Add angle to the labels to see all labels entirely
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
-        canvas = FigureCanvasTkAgg(fig, master = self.window)
-        canvas_widget = canvas.get_tk_widget()
-        canvas.get_tk_widget().config(bg=self.bg_string)
-        canvas_widget.pack(side = tk.TOP)
-
-    def add_ranked_plot(self, rank: pd.Series) -> None:
-        """
-        Make the ranked plot and add to the GUI
-        """
-        # # Get the ranked data from the API
-        # response = requests.get(self.rank_call)
-        # data_rank = response.json()
-
-        # Make a horizontal bar chart with the productivity score [-2,2] and
-        # the time spent in hours
-        data_to_plot = [[] for _ in range(5)]
-        for key, value in rank.items():
-            data_to_plot[2-key] = [key, value]
-        for i, sublist in enumerate(data_to_plot):
-            if len(sublist)<2:
-                data_to_plot[i] = [2-i, 0]
-
-        # Make the plot and add it to the GUI window
-        fig, (self.ax) = plt.subplots(1, 1, figsize=(5,2))
-        plt.title("Productivity (2 most productive, -2 most distracting))")
-        plt.xlabel("Time (hours)")
-        plt.barh(np.array(data_to_plot)[:,0],
-                np.array(data_to_plot)[:,1]/3600,
-                color=self.color_palette)
-        plt.tight_layout()
-        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
-        canvas = FigureCanvasTkAgg(fig, master = self.window)
-        canvas_widget = canvas.get_tk_widget()
-        canvas.get_tk_widget().config(bg=self.bg_string)
-        canvas_widget.pack(side = tk.TOP)
-
-    def add_categorical_plot(self, df: pd.DataFrame) -> None:
-        """
-        Make the categorical plot and add to the GUI
-        """
-        # # # Get the categorical data from the API
-        # # response = requests.get(self.category_call)
-        # # data_cat = response.json()
-
-        # # Make a vertical bar chart with the category and productivity score
-        # # Sort the Serie by value and only show the 10 biggest categories on the plot
-        top_ten = df.groupby("category").sum()['time'].sort_values(ascending=False)[:10]
-        plot_colors = [self.color_palette[2-df[df['category'] ==cat]['productivity'].iloc[0]]
-                       for cat in top_ten.keys()]
-
-        # Make the plot and add it to the GUI window
-        fig, (self.ax) = plt.subplots(1, 1, figsize=(5,4))
-        labels = get_labels(top_ten.keys(), 18)
-        plt.title("Categories")
-        plt.ylabel("Time (hours)")
-        plt.bar(labels, top_ten.values/3600, color=plot_colors)
-        # Add angle to the labels to see all labels entirely
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
-        canvas = FigureCanvasTkAgg(fig, master = self.window)
-        canvas_widget = canvas.get_tk_widget()
-        canvas.get_tk_widget().config(bg=self.bg_string)
-        canvas_widget.pack(side = tk.TOP)
 
 def get_labels(keys, n):
     labels = []
