@@ -153,7 +153,7 @@ class App(tk.Tk):
     def exit(self):
         self.timer.stop()
         self.timer.save_data()
-        self.radar.spotify_player.save_data()
+        self.spotify.save_data()
         self.window.destroy()
 
     def get_objective(self):

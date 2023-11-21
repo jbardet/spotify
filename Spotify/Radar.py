@@ -25,6 +25,7 @@ import time
 import random
 import sched, time
 from .TableDropDown import TableDropDown
+from Drive.Drive import Drive
 
 try:
     from ..Database import Database
@@ -47,16 +48,17 @@ class Radar():
     Interactive Radar plot class to choose parameters to create playlists
     """
 
-    def __init__(self, window, __db_id, __db_password, __db_name, fg_string, bg_string, currently_playing, color_palette, client):
+    def __init__(self, window, __db_id, __db_password, __db_name, fg_string, bg_string, color_palette, client, change_song):
         self.window = window
         self.__db_id = __db_id
         self.__db_password = __db_password
         self.__db_name = __db_name
         self.fg_string = fg_string
         self.bg_string = bg_string
-        self.currently_playing = currently_playing
         self.color_palette = color_palette
         self.client = client
+        self.text_font=('Aerial', 16)
+        self.change_song = change_song
         # # Test of some genres analysis
         # self.analyze_artists()
         self.db = Database(self.__db_id, self.__db_password, self.__db_name)
@@ -70,6 +72,7 @@ class Radar():
         # maybe automate this with only min and max to search through the db
         self.limits = [[0,1], [0,1], [0,1], [0,1], [0,1], [0,1],
                        [0,1], [4,-60], [0,250]]
+        # We will initialize from median of playlist
         acousticness = round_point_00_2(0.8960419161676647) # [0,1]
         energy = round_point_00_2(0.1208794011976048) # [0,1]
         danceability = round_point_00_2(0.44205808383233536) # [0,1]
@@ -97,6 +100,41 @@ class Radar():
         self.add_playlist_buttons()
         # Initialize the violin plots to show the distribution of the data
         self.violin_pos, self.violin_neg = None, None
+        self.drive = Drive()
+        # self.features_already_computed = self.load_features_computed()
+        self.features_to_add = {
+            'name': [],
+            'danceability': [],
+            'energy': [],
+            'key': [],
+            'loudness': [],
+            'mode': [],
+            'speechiness': [],
+            'acousticness': [],
+            'instrumentalness': [],
+            'liveness': [],
+            'valence': [],
+            'tempo': [],
+            'type': [],
+            'id': [],
+            'uri': [],
+            'track_href': [],
+            'analysis_url': [],
+            'duration_ms': [],
+            'time_signature': []
+        }
+        self.features_in_drive = self.drive.get_data('features.csv')[0]
+
+    def save_data(self):
+        self.drive.save_data('features.csv', self.features_to_add)
+
+    def load_features_computed(self):
+        """
+        Look in the drive for the features that have already been found but
+        not updated to the database yet
+        """
+        df_drive, _ = self.drive.get_data("features.csv")
+        return df_drive['id'].tolist()
 
     def display_labels(self, window: ttk.Frame):
         """
@@ -123,47 +161,36 @@ class Radar():
         playlist_frame.pack(side='top', anchor='c', fill='both', expand=True)
         try:
             with open("Playlists/playlists.json", "r") as file:
-                playlists = json.load(file)
+                self.playlists = json.load(file)
         except FileNotFoundError:
             with open(os.path.join(sys.path[-1], "Playlists/playlists.json"), "r") as file:
-                playlists = json.load(file)
+                self.playlists = json.load(file)
 
-        def update_second_table(self):
+        def update_second_table(event: tk.Event = None):
             """
             Update the second Table DropDown based on the first one
             """
-            second_table.config(values=["ALL"]+list(playlists[first_table.current_table.get()].keys()))
-            second_table.current(0)
+            self.second_table.config(values=["ALL"]+list(self.playlists[self.first_table.current_table.get()].keys()))
+            self.second_table.current(0)
 
         # Build the 2 table with the playlists
-        text_font=('Aerial', 16)
-        first_table = TableDropDown(playlist_frame,
-                                    list(playlists.keys()),
-                                    font=text_font)
-        playlist_frame.option_add('*TCombobox*Listbox.font', text_font)
-        first_table.pack(side="left", anchor = 'c',fill='both', expand=True)
-        second_table = TableDropDown(playlist_frame,
-                                     ["ALL"]+list(playlists[first_table.current_table.get()].keys()),
-                                     font=text_font)
-        playlist_frame.option_add('*TCombobox*Listbox.font', text_font)
-        second_table.pack(side="left", anchor = 'c',fill='both', expand=True)
-        first_table.bind("<<ComboboxSelected>>", update_second_table)
-
-        def show_value():
-            """
-            Show the values of the playlist on the graph
-            """
-            playlist_names = list(playlists[first_table.current_table.get()].keys())
-            playlist_name = second_table.current_table.get()
-            if playlist_name != "ALL":
-                playlist_names = [playlist_name]
-            self.show_playlist(playlist_names)
+        self.first_table = TableDropDown(playlist_frame,
+                                    list(self.playlists.keys()),
+                                    font=self.text_font)
+        playlist_frame.option_add('*TCombobox*Listbox.font', self.text_font)
+        self.first_table.pack(side="left", anchor = 'c',fill='both', expand=True)
+        self.second_table = TableDropDown(playlist_frame,
+                                     ["ALL"]+list(self.playlists[self.first_table.current_table.get()].keys()),
+                                     font=self.text_font)
+        playlist_frame.option_add('*TCombobox*Listbox.font', self.text_font)
+        self.second_table.pack(side="left", anchor = 'c',fill='both', expand=True)
+        self.first_table.bind("<<ComboboxSelected>>", update_second_table)
 
         def play_value():
             """
             Play the playlist selected on spotify
             """
-            playlist_name = second_table.current_table.get()
+            playlist_name = self.second_table.current_table.get()
             if playlist_name != "ALL":
                 self.play_playlist(playlist_name)
                 self.change_song()
@@ -171,9 +198,6 @@ class Radar():
                 tk.messagebox.showerror("Error",
                                         "You cannot play ALL playlists from a category")
 
-        b = ttk.Button(playlist_frame, text='Show playlist', command = show_value,
-                       style='my.TButton')
-        b.pack(side = "left", anchor = 'c',fill='both', expand=True)
         b = ttk.Button(playlist_frame, text='Play playlist', command = play_value,
                        style='my.TButton')
         b.pack(side = "left", anchor = 'c',fill='both', expand=True)
@@ -240,7 +264,7 @@ class Radar():
         """
         for area in self.area:
             area.remove()
-        self.area = self.ax.fill(self.angles, self.values, color=_from_rgb(self.color_palette[0]), alpha=0.7)
+        self.area = self.ax.fill(self.angles, self.values, color=_from_rgb(self.color_palette[0]), alpha=0.5)
 
     def create_draggable_points(self, canvas: tk.Canvas) -> List[DraggablePoint]:
         """
@@ -256,9 +280,17 @@ class Radar():
             # add self to you can pass a reference to the Graph instance to
             # the Point class when you create the points
             point = DraggablePoint(self, canvas, self.ax, self.angles,
-                                   self.values, i, _from_rgb(self.color_palette[-1]))
+                                   self.values, i, _from_rgb(self.color_palette[2]))
             points.append(point)
         return points
+
+    def update_playing_text(self):
+        try:
+            print("change name")
+            # print(self.currently_playing)
+            self.text_var.set(f'Playing: {self.currently_playing["item"]["name"]}')
+        except AttributeError:
+            pass
 
     def show_histogram(self, i: int):
         """
@@ -283,10 +315,15 @@ class Radar():
         self.violins[i][1].set_alpha(0)
         self.canvas.draw()
 
-    def plot_radar(self):
+    def update_currently_playing(self, currently_playing):
+        self.currently_playing = currently_playing
+
+    def plot_radar(self, currently_playing, text_var):
         """
         Plot the Radar graph on the GUI
         """
+        self.text_var = text_var
+        self.currently_playing = currently_playing
         fig, (self.ax) = plt.subplots(1, 1, figsize = (7, 7),
                                       subplot_kw=dict(polar=True))
 
@@ -330,56 +367,48 @@ class Radar():
         self.area = self.ax.fill(self.angles,
                                  self.values,
                                  color=_from_rgb(self.color_palette[0]),
-                                 alpha=0.7)
+                                 alpha=0.5)
 
+        self.create_playlist_frame = ttk.Frame(self.window)
+        self.create_playlist_frame.pack(side='bottom', anchor='c', fill='both', expand=True)
         # add a button to create a playlist
-        self.button = ttk.Button(self.window, text = "Create Playlist",
+        self.reset_button = ttk.Button(self.create_playlist_frame, text = "R", command = self.change_song,
+                                       style='my.TButton')
+        self.reset_button.pack(side = tk.LEFT, anchor = 'c', fill='both', expand=True)
+
+        def show_value():
+            """
+            Show the values of the playlist on the graph
+            """
+            playlist_names = list(self.playlists[self.first_table.current_table.get()].keys())
+            playlist_name = self.second_table.current_table.get()
+            if playlist_name != "ALL":
+                playlist_names = [playlist_name]
+            self.show_playlist(playlist_names)
+        b = ttk.Button(self.create_playlist_frame, text='Show playlist', command = show_value,
+                       style='my.TButton')
+        b.pack(side = "left", anchor = 'c',fill='both', expand=True)
+
+        # {options = ["Show playlist", "Show song"]
+
+        # self.show_table = TableDropDown(self.create_playlist_frame,
+        #                                 options,
+        #                                 font=self.text_font)
+        # self.create_playlist_frame.option_add('*TCombobox*Listbox.font', self.text_font)
+        # self.show_table.pack(side="left", anchor = 'c',fill='both', expand=True)}
+
+        self.button = ttk.Button(self.create_playlist_frame, text = "Create Playlist",
                                  command = self.create_playlist,
                                  style='my.TButton')
-        self.button.pack(side = tk.BOTTOM)
-
-        if self.currently_playing:
-            self.event = threading.Event()
-            self.submit_thread = threading.Thread(target=self.show_song,
-                                                  args=(self.event,))
-            self.submit_thread.daemon = True
-            self.submit_thread.start()
+        self.button.pack(side = tk.RIGHT, anchor = 'c',fill='both', expand=True)
 
         self.window.mainloop()
-
-    def change_song(self, schedule: sched=None):
-        """
-        Update the Monitor with the song that is now playing
-
-        :param schedule: needed when callback, defaults to None
-        :type schedule: sched, optional
-        """
-        time.sleep(2)
-        self.currently_playing = self.client.get_current_track()
-        time_rest = round(self.currently_playing['item']['duration_ms']/1000)
-        try:
-            self.monitor.new_song(time_rest)
-        except AttributeError:
-            self.monitor = Monitor(time_rest, self.change_song)
-            self.monitor.new_song(time_rest)
-        self.update_plot()
-
-    def show_song(self, event: tk.Event):
-        """
-        Show a song features values on the plot
-
-        :param event: _description_
-        :type event: tk.Event
-        """
-        time_rest = round((self.currently_playing['item']['duration_ms']-\
-            self.currently_playing['progress_ms'])/1000)
-        self.monitor = Monitor(time_rest, self.change_song)
-        self.monitor.schedule.run()
 
     def update_plot(self):
         """
         Update Radar's plot based on the new features
         """
+        print("update plot")
         try:
             self.playing[0].remove()
         except AttributeError:
@@ -393,16 +422,33 @@ class Radar():
         except TypeError:
             self.currently_playing = self.client.get_current_track()
             values = self.db.retrieve_feature(self.currently_playing['item']['id'])
-        if len(values)==0:
-            print("Cannot get features, will use default song")
-            values = self.db.retrieve_feature('0SRcyZIkogPq55QhbdBwzI')
         self.adjusted_values = []
-        for i, name in enumerate(self.cols):
-            index = self.columns.index(name)
-            value = (values[0][index]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
-            self.adjusted_values.append(value)
+        if len(values)==0:
+            if not self.currently_playing['item']['id'] in self.features_in_drive['id'].unique():
+                print("Getting features through API")
+                features = self.client.get_features([self.currently_playing['item']['id']])
+                self.features_to_add['name'].append(self.currently_playing['item']['name'])
+                for col in features[0].keys():
+                    self.features_to_add[col].append(features[0][col])
+                for i, name in enumerate(self.cols):
+                    value = (features[0][name]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+                    self.adjusted_values.append(value)
+            else:
+                # take from the Drive
+                features = self.features_in_drive[
+                    self.features_in_drive['id'] == self.currently_playing['item']['id']
+                    ]
+                for i, name in enumerate(self.cols):
+                    value = (features[name]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+                    self.adjusted_values.append(value)
+        else:
+            for i, name in enumerate(self.cols):
+                index = self.columns.index(name)
+                value = (values[0][index]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+                self.adjusted_values.append(value)
         self.adjusted_values += self.adjusted_values[:1]
-        self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[2]), alpha=0.2)
+        self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[-1]), alpha=0.5)
+        self.update_playing_text()
         self.canvas.draw()
 
     def convert_to_polar(self, x: float, y: float) -> Tuple[float, float]:
@@ -464,6 +510,7 @@ class Radar():
         self.songs = self.search_for_songs()
         if len(self.songs)>0:
             self.client.create_playlist(self.songs, "Test Playlist")
+            self.change_song()
         else:
             # display a message if no songs were found on the GUI
             label = ttk.Label(self.window, text = "No songs found, please modify parameters")

@@ -2,8 +2,12 @@
 tk_theme = equilux
 plt_theme = plasma
 
+[Spotify]
+device_id = ea6e9c167c23849e8efe9ecd7a9e6953184a1600
+
 [Timer]
 goal = 7.5
+pomodoro = 50
 
 [Drive]
 timer_data_file = timer_data.csv

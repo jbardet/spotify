@@ -209,9 +209,13 @@ class Timer():
         """
         Stop the timer
         """
-        if not self.timer_dict['event'][-1] == "stop":
-            self.timer_dict['event'].append("stop")
-            self.timer_dict['time'].append(datetime.now())
+        try:
+            if not self.timer_dict['event'][-1] == "stop":
+                self.timer_dict['event'].append("stop")
+                self.timer_dict['time'].append(datetime.now())
+        except IndexError:
+            # We haven't started the timer during the session
+            pass
         self.run = False
         # stop the thread
         try:

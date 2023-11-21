@@ -21,7 +21,7 @@ class Monitor():
         self.running = True
         self.callback = callback
         self.schedule = sched.scheduler(time.time, time.sleep)
-        self.offset = 5
+        self.offset = 2
         self.time_song = time_song - self.offset
         self.start()
 

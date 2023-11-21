@@ -31,8 +31,12 @@ class Parser():
 
         Parser.__tk_theme = Parser.configs.get("GUI", "tk_theme")
         Parser.__plt_theme = Parser.configs.get("GUI", "plt_theme")
+
+        Parser.__device_id = Parser.configs.get("Spotify", "device_id")
+
         Parser.__goal = Parser.configs.get("Timer", "goal")
         Parser.__pomodoro = Parser.configs.get("Timer", "pomodoro")
+
         Parser.__timer_data_file = Parser.configs.get("Drive", "timer_data_file")
         Parser.__offline_data_file = Parser.configs.get("Drive", "offline_data_file")
 
@@ -63,6 +67,16 @@ class Parser():
         :rtype: str
         """
         return Parser.__plt_theme
+
+    @staticmethod
+    def get_device_id() -> str:
+        """
+        Get the Device ID for Spotify
+
+        :return: the id of the device
+        :rtype: str
+        """
+        return Parser.__device_id
 
     @staticmethod
     def get_goal() -> str:

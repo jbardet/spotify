@@ -111,25 +111,45 @@ class APIClient:
             playlist_id = 'spotify:playlist:'+pl
         self.sp.start_playback(context_uri=playlist_id)
 
-    def play(self):
+    def play(self, device_id: str = None):
+        if device_id:
+            try:
+                self.sp.start_playback(device_id=device_id)
+            except spotipy.exceptions.SpotifyException:
+                raise
         try:
             self.sp.start_playback()
         except spotipy.exceptions.SpotifyException:
             raise
 
-    def pause(self):
+    def pause(self, device_id: str = None):
+        if device_id:
+            try:
+                self.sp.pause_playback(device_id=device_id)
+            except spotipy.exceptions.SpotifyException:
+                raise
         try:
             self.sp.pause_playback()
         except spotipy.exceptions.SpotifyException:
             raise
 
-    def next(self):
+    def next(self, device_id: str = None):
+        if device_id:
+            try:
+                self.sp.next_track(device_id=device_id)
+            except spotipy.exceptions.SpotifyException:
+                raise
         try:
             self.sp.next_track()
         except spotipy.exceptions.SpotifyException:
             raise
 
-    def previous(self):
+    def previous(self, device_id: str = None):
+        if device_id:
+            try:
+                self.sp.previous_track(device_id=device_id)
+            except spotipy.exceptions.SpotifyException:
+                raise
         try:
             self.sp.previous_track()
         except spotipy.exceptions.SpotifyException:
@@ -141,8 +161,13 @@ class APIClient:
         except spotipy.exceptions.SpotifyException:
             raise
 
-    def get_current_track(self):
-        return self.sp.current_user_playing_track()
+    def get_current_track(self, device_id: str = None):
+        try:
+            return self.sp.current_user_playing_track()
+        except spotipy.exceptions.SpotifyException as e:
+            if "The access token expired" in e.msg:
+                self.refresh_token()
+                return self.sp.current_user_playing_track()
 
     def __call_api(self, params: List[Tuple], name: str = None, type: str = 'search'):
         headers = {
@@ -172,6 +197,21 @@ class APIClient:
                 print("failed")
                 self.__ips.pop()
                 # raise
+
+    def get_devices(self):
+        headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer ' + self.__tokens[0],
+        }
+        response = requests.get('https://api.spotify.com/v1/me/player/devices',
+                            headers = headers)
+        return response.json()
+        # params = [
+        # ('q', 'devices'),
+        # ('type', 'player'),
+        # ]
+        # return self.__call_api(params, 'player', type="me")
 
     def get_artist_id(self, artist_name: str) -> str:
         params = [
@@ -244,7 +284,7 @@ class APIClient:
             # if feature:
             #     features.append(feature)
             # return features
-            time.sleep(10)
+            # time.sleep(10)
         except spotipy.exceptions.SpotifyException as e:
             # raise
             print(e)
