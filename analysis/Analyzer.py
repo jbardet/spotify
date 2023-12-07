@@ -20,6 +20,7 @@ class Analyzer:
         Initialize the class by first setting up the different classes for the
         different APIs
         """
+        self.__backup_path = Parser.get_hdd_path()
         self.rw_time = RescueWakaTime()
         self.todoist = Todoist()
         self.fitbit = Fitbit()
@@ -43,6 +44,6 @@ class Analyzer:
         """
         Save data from the APIs to local CSV files
         """
-        # self.rw_time.save_data()
-        # self.todoist.save_data()
-        self.fitbit.save_data()
+        self.rw_time.save_data(self.__backup_path)
+        self.todoist.save_data(self.__backup_path)
+        self.fitbit.save_data(self.__backup_path)

@@ -5,6 +5,10 @@ plt_theme = plasma
 [Spotify]
 device_id = ea6e9c167c23849e8efe9ecd7a9e6953184a1600
 
+[Database]
+name = spotifydb
+port = 100.92.62.145
+
 [Timer]
 goal = 7.5
 pomodoro = 50
@@ -20,3 +24,6 @@ fitbit_spo2 = fitbit_spo2.csv
 fitbit_hrv = fitbit_hrv.csv
 fitbit_sleep_intrad = fitbit_sleep_intrad.csv
 fitbit_sleep_day = fitbit_sleep_day.csv
+
+[HDD]
+path = E:\test

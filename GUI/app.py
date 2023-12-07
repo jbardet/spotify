@@ -38,16 +38,20 @@ from googleapiclient.errors import HttpError
 from todoist_api_python.api import TodoistAPI
 from tkinter import ttk
 from ttkthemes import ThemedTk
+from threading import Thread
 
 from RescueWakaTime.RescueWakaTime import RescueWakaTime
 from Todoist.Todoist import Todoist
 from Timer.Timer import Timer
+from Database.Database import Database
+from Drive.Drive import Drive
 # from Spotify.Radar import Radar
 from Spotify.Spotify import Spotify
 # from Calendar.Calendar import Calendar
 # from .Fitbit import Fitbit
 # from .LastFM import LastFM
 from Configs.Parser import Parser
+from Credentials.Credentials import Credentials
 
 class App(tk.Tk):
     """
@@ -58,13 +62,32 @@ class App(tk.Tk):
         """
         Initialize the GUI App and laucnh different function
         """
+        import time
+        self.start = time.time()
+        __db_cr = Credentials.get_database_credentials()
+        __db_id =__db_cr['id']
+        __db_password = __db_cr['password']
+
+        self.db_thread = Thread(target=self.initiate_db, args=(__db_id, __db_password))
+        self.db_thread.start()
         self.launch()
+
+        # self.initiate_db(__db_id, __db_password)
+
+    def initiate_db(self, __db_id, __db_password):
+        """
+        Initialize the database
+        """
+        try:
+            self.db = Database(__db_id, __db_password)
+        except TimeoutError:
+            self.db = Drive()
+        print("finish db")
 
     def launch(self):
         """
         Initialize the Window and lunch the different components
         """
-
         self.setup_theme()
 
         self.window.title('Plotting in Tkinter')
@@ -88,16 +111,25 @@ class App(tk.Tk):
         self.todoist = Todoist()
         self.todoist.build_frame(self.upright_frame, self.bg_string, self.fg_string)
         self.todoist.add_tasks()
-        self.timer = Timer(self.update)
+        print("need db")
+        self.db_thread.join()
+        print(time.time()-self.start)
+        start = time.time()
+        self.timer = Timer(self.update, self.db)
         self.timer.build_frame(self.downright_frame, self.objective, self.bg_string, self.fg_string)
         # You can use keyboard shortcuts to start and stop the timer
         self.window.bind('<Return>', self.timer.enter)
         self.window.bind('<Escape>', self.timer.stop)
-        self.spotify = Spotify()
+        print(time.time()-start)
+        # Spotify takes more time to load so will do it before Timer
+        start = time.time()
+        self.spotify = Spotify(self.db)
         self.spotify.build_frame(self.middle_frame, self.bg_string, self.fg_string)
+        print(time.time()-start)
         # # Espace key is not good because we use it to write in offline work
         # self.window.bind('<space>', self.radar.spotify_player.play)
         # self.radar.plot_radar()
+        # self.spotify.radar.window.mainloop()
 
         # Unused Apps for now
         # self.google_calendar(calendar_cr)
@@ -131,6 +163,12 @@ class App(tk.Tk):
         """
         Make the frames from the main window
         """
+        # # create a menu that will reload every graph/composants on the menu
+        # # it is for when the graphs get wrongly resized
+        # self.menu_bar = tk.Menu(self.window)
+        # self.window.config(menu=self.menu_bar)
+        # self.menu_bar.add_command(label='Reload', command=self.launch)
+
         self.left_frame = ttk.Frame(self.window)
         self.left_frame.pack(side='left', anchor='c', fill='both', expand=True,
                              padx=5, pady=5)

@@ -73,7 +73,7 @@ class Fitbit:
                                                       'REFRESH_TOKEN': self.__refresh_token})
         self.__connect_client()
 
-    def save_data(self):
+    def save_data(self, __backup_path):
         """
         Save data from the Fitbit's user accoutn via the API
         TODO: Add tests for API's requests if they fail
@@ -103,17 +103,17 @@ class Fitbit:
         # day_df.to_csv('data/fitbit_day.csv')
 
         try:
-            with open(os.path.join('data', self.__fitbit_intraday), 'r') as f:
+            with open(os.path.join(__backup_path, self.__fitbit_intraday), 'r') as f:
                 intraday_df_saved = pd.read_csv(f, index_col=0)
-            with open(os.path.join('data', self.__fitbit_day), 'r') as f:
+            with open(os.path.join(__backup_path, self.__fitbit_day), 'r') as f:
                 day_df_saved = pd.read_csv(f, index_col=0)
-            with open(os.path.join('data', self.__fitbit_spo2), 'r') as f:
+            with open(os.path.join(__backup_path, self.__fitbit_spo2), 'r') as f:
                 spo2_df_saved = pd.read_csv(f, index_col=0)
-            with open(os.path.join('data', self.__fitbit_hrv), 'r') as f:
+            with open(os.path.join(__backup_path, self.__fitbit_hrv), 'r') as f:
                 hrv_df_saved = pd.read_csv(f, index_col=0)
-            with open(os.path.join('data', self.__fitbit_sleep_intrad), 'r') as f:
+            with open(os.path.join(__backup_path, self.__fitbit_sleep_intrad), 'r') as f:
                 sleep_intrad_df_saved = pd.read_csv(f, index_col=0)
-            with open(os.path.join('data', self.__fitbit_sleep_day), 'r') as f:
+            with open(os.path.join(__backup_path, self.__fitbit_sleep_day), 'r') as f:
                 sleep_day_df_saved = pd.read_csv(f, index_col=0)
             last_save = intraday_df_saved['date'].iloc[-1]
         except FileNotFoundError:
@@ -461,12 +461,12 @@ class Fitbit:
             hrv_df = hrv_df_added
             sleep_intrad_df = sleep_intrad_df_added
             sleep_day_df = sleep_day_df_added
-        intraday_df.to_csv(os.path.join('data', self.__fitbit_intraday))
-        day_df.to_csv(os.path.join('data', self.__fitbit_day))
-        spo2_df.to_csv(os.path.join('data', self.__fitbit_spo2))
-        hrv_df.to_csv(os.path.join('data', self.__fitbit_hrv))
-        sleep_intrad_df.to_csv(os.path.join('data', self.__fitbit_sleep_intrad))
-        sleep_day_df.to_csv(os.path.join('data', self.__fitbit_sleep_day))
+        intraday_df.to_csv(os.path.join(__backup_path, self.__fitbit_intraday))
+        day_df.to_csv(os.path.join(__backup_path, self.__fitbit_day))
+        spo2_df.to_csv(os.path.join(__backup_path, self.__fitbit_spo2))
+        hrv_df.to_csv(os.path.join(__backup_path, self.__fitbit_hrv))
+        sleep_intrad_df.to_csv(os.path.join(__backup_path, self.__fitbit_sleep_intrad))
+        sleep_day_df.to_csv(os.path.join(__backup_path, self.__fitbit_sleep_day))
 
         # # Get Activity Log List TODO: need to save data
         # # activities list -> useless

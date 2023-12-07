@@ -7,9 +7,10 @@ from datetime import datetime
 from Drive.Drive import Drive
 from typing import Callable, Dict
 from Configs.Parser import Parser
+from Database.Database import Database
 
 try:
-    from ..Database import Database
+    # from ..Database import Database
     from ..Client import APIClient
 except ImportError:
     import sys
@@ -17,7 +18,7 @@ except ImportError:
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-    from Database import Database
+    # from Database import Database
     from Client import APIClient
 
 class SpotifyPlayer():
@@ -28,10 +29,10 @@ class SpotifyPlayer():
     def __init__(self,
                  window: tk.Frame,
                  callback: Callable,
+                 db,
                  spotify_cr: Dict[str, str],
                  fg_string: str,
-                 bg_string: str,
-                 currently_playing: dict = None):
+                 bg_string: str):
         """
         Initialize the SpotifyPlayer widget
 
@@ -48,15 +49,15 @@ class SpotifyPlayer():
         """
         self.window = window
         self.callback = callback
+        self.db = db
         self.__spotify_cr = spotify_cr
         self.fg_string = fg_string
         self.bg_string = bg_string
         self.client = APIClient([self.__spotify_cr['username']],
                                 [self.__spotify_cr['client_id']],
                                 [self.__spotify_cr['client_secret']])
-        self.liked_songs = {'name': [], 'id': [], 'time': [], 'like': []}
+        self.liked_songs = {'name': [], 'id': [], 'time': [], 'type': []}
         self.device_id = Parser.get_device_id()
-        self.currently_playing = currently_playing
         # self.track_name = self.currently_playing['item']['name']
 
         self.button_width = 6
@@ -153,7 +154,6 @@ class SpotifyPlayer():
         """
         Play the song
         """
-        if self.playing: return
         try:
             self.client.play()
             self.callback("play")
@@ -202,12 +202,14 @@ class SpotifyPlayer():
         Save to spreadsheet when a song is liked
         """
         try:
-            self.liked_songs['name'].append(self.currently_playing['item']['name'])
-            self.liked_songs['id'].append(self.currently_playing['item']['id'])
+            currently_playing = self.callback("like")
+            self.liked_songs['name'].append(currently_playing['item']['name'])
+            self.liked_songs['id'].append(currently_playing['item']['id'])
             self.liked_songs['time'].append(datetime.now())
-            self.liked_songs['like'].append(True)
-        except TypeError:
+            self.liked_songs['type'].append(True)
+        except TypeError as e:
             # Nothing's playing, cannot like the song
+            print(e)
             pass
 
     def unlike(self):
@@ -215,16 +217,18 @@ class SpotifyPlayer():
         Save to spreadsheet when a song is unliked
         """
         try:
-            self.liked_songs['name'].append(self.currently_playing['item']['name'])
-            self.liked_songs['id'].append(self.currently_playing['item']['id'])
+            currently_playing = self.callback("like")
+            self.liked_songs['name'].append(currently_playing['item']['name'])
+            self.liked_songs['id'].append(currently_playing['item']['id'])
             self.liked_songs['time'].append(datetime.now())
-            self.liked_songs['like'].append(False)
-        except TypeError:
+            self.liked_songs['type'].append(False)
+        except TypeError as e:
             # Nothing's playing, cannot like the song
+            print(e)
             pass
 
     def save_data(self):
         """
         Save the data to Google Drive
         """
-        Drive().save_data("liked_songs.csv", self.liked_songs)
+        self.db.save_liked_data(self.liked_songs)

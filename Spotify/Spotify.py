@@ -25,9 +25,11 @@ from .TableDropDown import TableDropDown
 from .Radar import Radar
 from Drive.Drive import Drive
 import subprocess
+from Database.Database import Database
+import datetime
 
 try:
-    from ..Database import Database
+    # from ..Database import Database
     from ..Client import APIClient
 except ImportError:
     import sys
@@ -35,7 +37,7 @@ except ImportError:
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-    from Database import Database
+    # from Database import Database
     from Client import APIClient
 
 class Spotify():
@@ -43,14 +45,14 @@ class Spotify():
     Class to handle the middle frame of the GUI where the music is handled
     """
 
-    def __init__(self):
+    def __init__(self, db):
         """
         Initialize the Radar class with Spotify credentials as well as database
         """
-        self.__db_cr = Credentials.get_database_credentials()
-        self.__db_id = self.__db_cr['id']
-        self.__db_password = self.__db_cr['password']
-        self.__db_name = self.__db_cr["db_name"]
+        # self.__db_cr = Credentials.get_database_credentials()
+        # self.__db_id = self.__db_cr['id']
+        # self.__db_password = self.__db_cr['password']
+        self.db = db
         self.__spotify_cr = Credentials.get_spotify_credentials()
         if len(self.__spotify_cr['username']) == 0 or \
             len(self.__spotify_cr['client_id']) == 0 or \
@@ -67,6 +69,10 @@ class Spotify():
             'reason_end': [],
             'paused': []
         }
+        # try:
+        #     self.db = Database(self.__db_id, self.__db_password)
+        # except TimeoutError:
+        #     self.db = Drive()
         # from AppData\Local\Packages\SpotifyAB.SpotifyMusic_zpdnekdrzrea0
         # subprocess.Popen(["spotify.exe"])
 
@@ -99,30 +105,20 @@ class Spotify():
         add_website_link(link_frame, url, text, font, side,
                          fg = self.fg_string, bg = self.bg_string)
 
-        self.radar = Radar(self.window, self.__db_id, self.__db_password,
-                           self.__db_name, self.fg_string, self.bg_string,
+        self.radar = Radar(self.window, self.db, self.fg_string, self.bg_string,
                            self.color_palette, self.client, self.change_playlist)
         # Initialize the spotify player to play songs
         spotify_player_frame = ttk.Frame(self.window)
         spotify_player_frame.pack(side='bottom', anchor='c', fill='both', expand=True)
         self.spotify_player = SpotifyPlayer(spotify_player_frame,
                                             self.update_monitor,
+                                            self.db,
                                             self.__spotify_cr,
                                             self.fg_string,
                                             self.bg_string)
         # currently playing is empty when Spotify is closed or just opened but
         # nothing has been played yet. Otherwise we have the is_playing = True/False
         self.currently_playing = self.client.get_current_track(self.device_id)
-        if self.currently_playing:
-            if self.currently_playing['is_playing'] == True:
-                self.data_to_save['ts'].append(time.time())
-                self.data_to_save['id'].append(self.currently_playing['item']['id'])
-                self.data_to_save['reason_start'].append("open")
-                self.start_thread()
-                self.spotify_player.set_playing(True)
-            else:
-                self.spotify_player.set_playing(False)
-
         if self.currently_playing:
             name = self.currently_playing['item']['name']
         else:
@@ -131,8 +127,18 @@ class Spotify():
         self.text_var.set(f'Playing: {name}')
         self.song_name_label = ttk.Label(link_frame, textvariable=self.text_var, font=("Arial",16))
         self.song_name_label.pack(side = tk.LEFT, anchor = 'c',fill='both', expand=True)
+        self.radar.prepare_plot(self.text_var)
+        if self.currently_playing:
+            if self.currently_playing['is_playing'] == True:
+                self.data_to_save['ts'].append(datetime.datetime.now())
+                self.data_to_save['id'].append(self.currently_playing['item']['id'])
+                self.data_to_save['reason_start'].append("open")
+                self.start_thread()
+                self.spotify_player.set_playing(True)
+            else:
+                self.spotify_player.set_playing(False)
 
-        self.radar.plot_radar(self.currently_playing, self.text_var)
+        self.radar.plot_radar(self.currently_playing)
 
     def change_playlist(self):
         """
@@ -180,16 +186,16 @@ class Spotify():
             self.data_to_save['reason_end'].append('trackdone')
             self.data_to_save['reason_start'].append("trackdone")
             try:
-                self.data_to_save['paused'].append(time.time() - self.start_pause)
+                self.data_to_save['paused'].append(datetime.datetime.now() - self.start_pause)
                 self.start_pause = None
             except (AttributeError, TypeError):
                 self.data_to_save['paused'].append(0)
         time.sleep(2)
         self.currently_playing = self.client.get_current_track(self.device_id)
-        self.data_to_save['ts'].append(time.time())
+        self.data_to_save['ts'].append(datetime.datetime.now())
         # Watch out it has time to update the currently_playing
-        self.data_to_save['id'].append(self.currently_playing['item']['id'])
         try:
+            self.data_to_save['id'].append(self.currently_playing['item']['id'])
             time_rest = round(self.currently_playing['item']['duration_ms']/1000)
         except TypeError:
             return
@@ -209,12 +215,15 @@ class Spotify():
         :param action: the action name
         :type action: str
         """
+        if action == "like":
+            print(self.currently_playing)
+            return self.currently_playing
         if action == "play":
             if len(self.data_to_save['ts']) == 0:
                 time.sleep(2)
                 self.currently_playing = self.client.get_current_track(self.device_id)
                 # we haven't played anything yet, this is the first song
-                self.data_to_save['ts'].append(time.time())
+                self.data_to_save['ts'].append(datetime.datetime.now())
                 self.data_to_save['id'].append(self.currently_playing['item']['id'])
                 self.data_to_save['reason_start'].append("open")
                 self.start_thread()
@@ -225,35 +234,35 @@ class Spotify():
                 self.radar.update_plot()
                 try:
                     if len(self.data_to_save['paused'])<len(self.data_to_save['ts']):
-                        self.data_to_save['paused'].append(time.time() - self.start_pause)
+                        self.data_to_save['paused'].append(datetime.datetime.now() - self.start_pause)
                         self.start_pause = None
                     else:
-                        self.data_to_save['paused'][-1] += time.time() - self.start_pause
+                        self.data_to_save['paused'][-1] += datetime.datetime.now() - self.start_pause
                         self.start_pause = None
                 except (AttributeError, TypeError):
                     # the song was not playing before
                     pass
         elif action == "pause":
-            self.start_pause = time.time()
+            self.start_pause = datetime.datetime.now()
         elif action == "next":
             self.change_song()
             # Watch out it has time to update the currently_playing
             self.data_to_save['reason_start'].append("next")
             self.data_to_save['reason_end'].append('next')
             try:
-                self.data_to_save['paused'].append(time.time() - self.start_pause)
+                self.data_to_save['paused'].append(datetime.datetime.now() - self.start_pause)
                 self.start_pause = None
             except (AttributeError, TypeError):
                 self.data_to_save['paused'].append(0)
         elif action == "previous":
             self.change_song()
-            self.data_to_save['ts'].append(time.time())
+            self.data_to_save['ts'].append(datetime.datetime.now())
             # Watch out it has time to update the currently_playing
             # TODO: maybe knows
             self.data_to_save['reason_start'].append("previous")
             self.data_to_save['reason_end'].append('previous')
             try:
-                self.data_to_save['paused'].append(time.time() - self.start_pause)
+                self.data_to_save['paused'].append(datetime.datetime.now() - self.start_pause)
                 self.start_pause = None
             except (AttributeError, TypeError):
                 self.data_to_save['paused'].append(0)
@@ -261,7 +270,7 @@ class Spotify():
 
     def save_data(self):
         """
-        Saves data into Google Drive
+        Saves data into Raspberry Pi
         """
         self.radar.save_data()
         self.spotify_player.save_data()
@@ -269,7 +278,7 @@ class Spotify():
             self.data_to_save['reason_end'].append('close')
         if len(self.data_to_save['paused'])<len(self.data_to_save['ts']):
             try:
-                self.data_to_save['paused'].append(time.time() - self.start_pause)
+                self.data_to_save['paused'].append(datetime.datetime.now() - self.start_pause)
                 self.start_pause = None
             except (AttributeError, TypeError):
                 self.data_to_save['paused'].append(0)
@@ -277,6 +286,6 @@ class Spotify():
 
     def save_data_to_save(self):
         """
-        Save the data to save into the the Drive
+        Save the data to save into the the Raspberry
         """
-        Drive().save_data("spotify.csv", self.data_to_save)
+        self.db.save_history_data(self.data_to_save)

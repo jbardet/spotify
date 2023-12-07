@@ -34,6 +34,9 @@ class Parser():
 
         Parser.__device_id = Parser.configs.get("Spotify", "device_id")
 
+        Parser.__db_name = Parser.configs.get("Database", "name")
+        Parser.__db_port = Parser.configs.get("Database", "port")
+
         Parser.__goal = Parser.configs.get("Timer", "goal")
         Parser.__pomodoro = Parser.configs.get("Timer", "pomodoro")
 
@@ -47,6 +50,9 @@ class Parser():
         Parser.__fitbit_hrv = Parser.configs.get("Fitbit", "fitbit_hrv")
         Parser.__fitbit_sleep_intrad = Parser.configs.get("Fitbit", "fitbit_sleep_intrad")
         Parser.__fitbit_sleep_day = Parser.configs.get("Fitbit", "fitbit_sleep_day")
+
+        #Backup
+        Parser.__hdd_path = Parser.configs.get("HDD", "path")
 
     @staticmethod
     def get_tk_theme() -> str:
@@ -77,6 +83,26 @@ class Parser():
         :rtype: str
         """
         return Parser.__device_id
+
+    @staticmethod
+    def get_db_name() -> str:
+        """
+        Get the Database name
+
+        :return: the name of the database
+        :rtype: str
+        """
+        return Parser.__db_name
+
+    @staticmethod
+    def get_db_port() -> str:
+        """
+        Get the Database remote port
+
+        :return: the port IP adress
+        :rtype: str
+        """
+        return Parser.__db_port
 
     @staticmethod
     def get_goal() -> str:
@@ -177,3 +203,13 @@ class Parser():
         :rtype: str
         """
         return Parser.__fitbit_sleep_day
+
+    @staticmethod
+    def get_hdd_path() -> str:
+        """
+        Get the Backup path
+
+        :return: the path where to backup data
+        :rtype: str
+        """
+        return Parser.__hdd_path

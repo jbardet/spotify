@@ -52,6 +52,7 @@ import multiprocessing
 import time
 import random
 import sched, time
+from sshtunnel import SSHTunnelForwarder
 
 def get_script_folder():
     # path of main .py or .exe when converted with pyinstaller
@@ -77,19 +78,21 @@ try:
     from GUI.app import App
     from Credentials.Credentials import Credentials
     from Configs.Parser import Parser
-    from Analysis.Analyzer import Analyzer
+    # from Analysis.Analyzer import Analyzer
 except ModuleNotFoundError:
     sys.path.append(os.path.dirname(get_script_folder()))
     from GUI.app import App
     from Credentials.Credentials import Credentials
     from Configs.Parser import Parser
-    from Analysis.Analyzer import Analyzer
+    # from Analysis.Analyzer import Analyzer
 
-def main(params) -> None:
+def main() -> None:
     try:
         Credentials.initialize()
     except FileNotFoundError:
         sys.exit(1)
+    # test_ssh()
+    # print("finish")
     Parser.initialize()
     App()
     # analyzer = Analyzer()
@@ -102,4 +105,7 @@ def main(params) -> None:
     #     analyzer.weekly_review()
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    # main(sys.argv[1:])
+    main()
+    # import cProfile
+    # cProfile.run('main()')

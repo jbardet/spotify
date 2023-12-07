@@ -63,7 +63,10 @@ class RescueWakaTime():
         :rtype: _type_
         """
         response = requests.get(self.status_call)
-        return response.json()
+        try:
+            return response.json()
+        except json.decoder.JSONDecodeError as e :
+            return {}
 
     def get_data_activity(self) -> dict:
         """
@@ -82,7 +85,10 @@ class RescueWakaTime():
         self.data_activity = self.get_data_activity()
         self.status_bar = self.get_status_bar()
         for widget in self.window.winfo_children():
-            widget.destroy()
+            try:
+                widget.destroy()
+            except tk.TclError:
+                pass
         self.add_analytics()
 
     def build_frame(self, window: ttk.Frame, bg_string: str, fg_string: str):
@@ -186,16 +192,22 @@ class RescueWakaTime():
         rt_tot_time = df['time'].sum()/3600
         try:
             rt_prod_time = df.groupby('productivity').sum()['time'][2]/3600
-        except IndexError:
+        except (IndexError, KeyError) as e:
+            print(e)
             rt_prod_time = 0
         try:
             rt_vs_time = df.groupby('activity').sum()['time']['Visual Studio Code']/3600
-        except KeyError:
+        except (IndexError, KeyError) as e:
+            print(e)
             rt_vs_time = 0
         try:
             total_today = self.status_bar['data']['grand_total']['decimal']
             categories = self.status_bar['data']['categories']
-        except KeyError:
+        except (IndexError, KeyError) as e:
+            print(e)
+            total_today = 0
+            categories = []
+        if isinstance(total_today, str):
             total_today = 0
             categories = []
         # Make the plot and add it to the GUI window
@@ -319,7 +331,7 @@ class RescueWakaTime():
                             "Categories",
                             "Time (hours)")
 
-    def save_data(self):
+    def save_data(self, __backup_path):
         """
         Save the weekly data from the API in a json file
         """
@@ -334,17 +346,17 @@ class RescueWakaTime():
         # activities_saved.to_csv('data/first_save/rescuetime_overview.csv')
         # print("oe")
         try:
-            activities_saved = pd.read_csv('data/rescuetime_activities.csv')
+            activities_saved = pd.read_csv(os.path.join(__backup_path, 'rescuetime_activities.csv'))
             activities_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
             # activities_saved.sort_values(by='date', inplace=True)
             # activities_saved.to_csv('data/rescuetime_activities.csv')
             activities_last_save = activities_saved['date'].iloc[-1]
-            summary_saved = pd.read_csv('data/rescuetime_summary.csv')
+            summary_saved = pd.read_csv(os.path.join(__backup_path, 'rescuetime_summary.csv'))
             summary_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
             # summary_saved.sort_values(by='date', inplace=True)
             # summary_saved.to_csv('data/rescuetime_summary.csv')
             summary_last_save = activities_saved['date'].iloc[-1]
-            overview_saved = pd.read_csv('data/rescuetime_overview.csv')
+            overview_saved = pd.read_csv(os.path.join(__backup_path, 'rescuetime_overview.csv'))
             overview_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
             # overview_saved.sort_values(by='date', inplace=True)
             # overview_saved.to_csv('data/rescuetime_overview.csv')
@@ -508,8 +520,8 @@ class RescueWakaTime():
             activities = pd.concat([activities_saved, activities_added], ignore_index=True)
         except UnboundLocalError:
             activities = activities_added
-        overview.to_csv('data/rescuetime_overview.csv')
-        activities.to_csv('data/rescuetime_activities.csv')
+        overview.to_csv(os.path.join(__backup_path, 'rescuetime_overview.csv'))
+        activities.to_csv(os.path.join(__backup_path, 'rescuetime_activities.csv'))
 
         summary_dict = {
             'date': [],
@@ -591,7 +603,7 @@ class RescueWakaTime():
             summary = pd.concat([summary_saved_copy, summary_added], ignore_index=True)
         except UnboundLocalError:
             summary = summary_added
-        summary.to_csv('data/rescuetime_summary.csv')
+        summary.to_csv(os.path.join(__backup_path, 'rescuetime_summary.csv'))
 
         print("oe")
         # summary no need to change
@@ -615,11 +627,11 @@ class RescueWakaTime():
         # # Warning: 'Coding activity older than 2 weeks is not available on the free plan.'
         # get the last save from the last csv file
         try:
-            durations_saved = pd.read_csv('data/wakatime_durations.csv')
+            durations_saved = pd.read_csv(os.path.join(__backup_path, 'wakatime_durations.csv'))
             durations_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
             durations_last_save = durations_saved['time'].iloc[-1]
             durations_first_save = False
-            heartbeats_saved = pd.read_csv('data/wakatime_heartbeats.csv')
+            heartbeats_saved = pd.read_csv(os.path.join(__backup_path, 'wakatime_heartbeats.csv'))
             heartbeats_saved.drop(['Unnamed: 0'], axis=1, inplace=True)
             heartbeats_last_save = heartbeats_saved['time'].iloc[-1]
             heartbeats_first_save = False
@@ -656,10 +668,12 @@ class RescueWakaTime():
             'duration': []
         }
 
-
         d1 = datetime.datetime.strptime(heartbeats_date_save,"%Y-%m-%d").date()
         d2 = datetime.date.today()
         delta = d2 - d1
+        if delta.days>14:
+            d1 = d2 - td(days=14)
+            delta = d2 - d1
         # Iterate through the days, making a request per day
         for i in range(delta.days + 1):
             # Find iter date and set begin and end values to this to extract at once.
@@ -697,6 +711,9 @@ class RescueWakaTime():
         d1 = datetime.datetime.strptime(durations_date_save,"%Y-%m-%d").date()
         d2 = datetime.date.today()
         delta = d2 - d1
+        if delta.days>14:
+            d1 = d2 - td(days=14)
+            delta = d2 - d1
         # Iterate through the days, making a request per day
         for i in range(delta.days + 1):
             # Find iter date and set begin and end values to this to extract at once.
@@ -763,8 +780,8 @@ class RescueWakaTime():
         else:
             heartbeats = heartbeats_added
         heartbeats_added = heartbeats_added_copy
-        durations.to_csv('data/wakatime_durations.csv')
-        heartbeats.to_csv('data/wakatime_heartbeats.csv')
+        durations.to_csv(os.path.join(__backup_path, 'wakatime_durations.csv'))
+        heartbeats.to_csv(os.path.join(__backup_path, 'wakatime_heartbeats.csv'))
 
 def get_labels(keys, n):
     labels = []

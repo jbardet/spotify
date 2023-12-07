@@ -26,9 +26,9 @@ import random
 import sched, time
 from .TableDropDown import TableDropDown
 from Drive.Drive import Drive
+from Database.Database import Database
 
 try:
-    from ..Database import Database
     from ..Client import APIClient
 except ImportError:
     import sys
@@ -36,7 +36,6 @@ except ImportError:
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-    from Database import Database
     from Client import APIClient
 
 # plt.switch_backend('agg')
@@ -48,11 +47,9 @@ class Radar():
     Interactive Radar plot class to choose parameters to create playlists
     """
 
-    def __init__(self, window, __db_id, __db_password, __db_name, fg_string, bg_string, color_palette, client, change_song):
+    def __init__(self, window, db, fg_string, bg_string, color_palette, client, change_song):
         self.window = window
-        self.__db_id = __db_id
-        self.__db_password = __db_password
-        self.__db_name = __db_name
+        self.db = db
         self.fg_string = fg_string
         self.bg_string = bg_string
         self.color_palette = color_palette
@@ -61,8 +58,8 @@ class Radar():
         self.change_song = change_song
         # # Test of some genres analysis
         # self.analyze_artists()
-        self.db = Database(self.__db_id, self.__db_password, self.__db_name)
-        self.columns = [column[0] for column in self.db.get_column_names()]
+        # self.db = Database(self.__db_id, self.__db_password, self.__db_name)
+        # self.columns = [column[0] for column in self.db.get_column_names()]
 
         # features that we get from the database and that we're most interested in
         self.cols = ['acousticness', 'energy', 'danceability', 'valence', 'liveness',
@@ -100,8 +97,9 @@ class Radar():
         self.add_playlist_buttons()
         # Initialize the violin plots to show the distribution of the data
         self.violin_pos, self.violin_neg = None, None
-        self.drive = Drive()
+        # self.drive = Drive()
         # self.features_already_computed = self.load_features_computed()
+        self.shown_violins = False
         self.features_to_add = {
             'name': [],
             'danceability': [],
@@ -123,18 +121,23 @@ class Radar():
             'duration_ms': [],
             'time_signature': []
         }
-        self.features_in_drive = self.drive.get_data('features.csv')[0]
+        # self.features_in_drive = self.drive.get_data('features.csv')[0]
 
     def save_data(self):
-        self.drive.save_data('features.csv', self.features_to_add)
+        # self.drive.save_data('features.csv', self.features_to_add)
+        try:
+            self.db.save_feature(self.features_to_add)
+        except AttributeError:
+            # no connection to DB so no features saving
+            pass
 
-    def load_features_computed(self):
-        """
-        Look in the drive for the features that have already been found but
-        not updated to the database yet
-        """
-        df_drive, _ = self.drive.get_data("features.csv")
-        return df_drive['id'].tolist()
+    # def load_features_computed(self):
+    #     """
+    #     Look in the drive for the features that have already been found but
+    #     not updated to the database yet
+    #     """
+    #     df_drive, _ = self.drive.get_data("features.csv")
+    #     return df_drive['id'].tolist()
 
     def display_labels(self, window: ttk.Frame):
         """
@@ -172,6 +175,7 @@ class Radar():
             """
             self.second_table.config(values=["ALL"]+list(self.playlists[self.first_table.current_table.get()].keys()))
             self.second_table.current(0)
+            self.remove_histograms()
 
         # Build the 2 table with the playlists
         self.first_table = TableDropDown(playlist_frame,
@@ -209,7 +213,7 @@ class Radar():
         :param playlist_names: the name of the playlist
         :type playlist_names: str
         """
-        pl = self.db.get_playlist(playlist_name) # pl['uri']
+        pl = self.db.get_playlist_id(playlist_name) # pl['uri']
         self.client.play_playlist(pl[0][0])
 
     def show_playlist(self, playlist_names: List[str]):
@@ -220,23 +224,31 @@ class Radar():
         :type playlist_names: List[str]
         """
         # Retrieve the different features of each of the playlists and store them
-        tracks_features = {}
-        for col in self.cols:
-            tracks_features[col] = []
-        for playlist_name in playlist_names:
-            try:
-                playlist_tracks = self.db.get_playlist_tracks(playlist_name)
-            except IndexError:
-                continue
-            for track in playlist_tracks[1:-1].split(","):
-                try:
-                    track_features = self.db.retrieve_feature(track)[0]
-                    for key in tracks_features.keys():
-                        tracks_features[key].append(track_features[self.columns.index(key)])
-                except IndexError:
-                    pass
+        # tracks_features = {}
+        playlist_tracks = self.db.get_playlists_tracks(playlist_names)
+        # if len(playlist_names)==1:
+        #     playlist_tracks = self.db.get_playlists_tracks(playlist_names)
+        # else:
+        #     playlist_tracks = self.db.get_playlists_tracks(playlist_names)
+        columns_, values = self.db.retrieve_features(playlist_tracks)
+        # for col in self.cols:
+        #     tracks_features[col] = []
+        # for playlist_name in playlist_names:
+        #     try:
+        #         playlist_tracks = self.db.get_playlist_tracks(playlist_name)
+        #     except IndexError:
+        #         continue
+        #     columns_, values = self.db.retrieve_features(playlist_tracks)
+        #     # for track in playlist_tracks:
+        #     #     try:
+        #     #         columns, values = self.db.retrieve_feature(track)
+        #     #         for i, key in enumerate(columns):
+        #     #             if key in tracks_features:
+        #     #                 tracks_features[key].append(values[0][i])
+        #     #     except IndexError:
+        #     #         pass
         # create a DataFrame from the results and show the histograms of statistics
-        df = pd.DataFrame.from_dict(tracks_features)
+        df = pd.DataFrame(values, columns=columns_)
         for i, col in enumerate(self.cols):
             try:
                 violin_pos, violin_neg = self.get_violin(df[col], i)
@@ -246,7 +258,6 @@ class Radar():
             self.violins[i] = [violin_pos, violin_neg]
             self.show_histogram(i)
         self.canvas.draw()
-
 
     def change_value(self, i: int):
         """
@@ -288,7 +299,8 @@ class Radar():
         try:
             print("change name")
             # print(self.currently_playing)
-            self.text_var.set(f'Playing: {self.currently_playing["item"]["name"]}')
+            # sometime gives error main thread is not in main loop
+            # self.text_var.set(f'Playing: {self.currently_playing["item"]["name"]}')
         except AttributeError:
             pass
 
@@ -313,17 +325,15 @@ class Radar():
         """
         self.violins[i][0].set_alpha(0)
         self.violins[i][1].set_alpha(0)
-        self.canvas.draw()
 
     def update_currently_playing(self, currently_playing):
         self.currently_playing = currently_playing
 
-    def plot_radar(self, currently_playing, text_var):
+    def prepare_plot(self, text_var):
         """
-        Plot the Radar graph on the GUI
+        Prepare the plot of the Radar graph on the GUI
         """
         self.text_var = text_var
-        self.currently_playing = currently_playing
         fig, (self.ax) = plt.subplots(1, 1, figsize = (7, 7),
                                       subplot_kw=dict(polar=True))
 
@@ -337,19 +347,6 @@ class Radar():
         # You can also set gridlines manually like this:
         self.ax.set_rgrids([0, 0.2, 0.4, 0.6, 0.8, 1], fontsize=12)
 
-        # Create a colormap from green to red
-        db_data = self.db.get_all()
-        df = pd.DataFrame(db_data)
-        df.columns = self.columns
-
-        self.violins = []
-        for i, col in enumerate(self.cols):
-            # normalize the column so that rounding is then equivalent everywhere
-            violin_pos, violin_neg = self.get_violin(df[col], i)
-            violin_pos.set_alpha(0)
-            violin_neg.set_alpha(0)
-            self.violins.append([violin_pos, violin_neg])
-
         self.ax.set_rlabel_position(40)
         plt.autoscale(enable=False)
         fig, self.ax = set_plot_color(fig, self.ax, self.fg_string)
@@ -358,6 +355,12 @@ class Radar():
         canvas_widget = self.canvas.get_tk_widget()
         self.canvas.get_tk_widget().config(bg=self.bg_string)
         canvas_widget.pack(side = tk.TOP)
+
+    def plot_radar(self, currently_playing):
+        """
+        Plot the Radar graph on the GUI
+        """
+        self.currently_playing = currently_playing
 
         # if something is playing, aso show on the graph
         if self.currently_playing:
@@ -380,11 +383,15 @@ class Radar():
             """
             Show the values of the playlist on the graph
             """
-            playlist_names = list(self.playlists[self.first_table.current_table.get()].keys())
-            playlist_name = self.second_table.current_table.get()
-            if playlist_name != "ALL":
-                playlist_names = [playlist_name]
-            self.show_playlist(playlist_names)
+            if not self.shown_violins:
+                self.shown_violins = True
+                playlist_names = list(self.playlists[self.first_table.current_table.get()].keys())
+                playlist_name = self.second_table.current_table.get()
+                if playlist_name != "ALL":
+                    playlist_names = [playlist_name]
+                self.show_playlist(playlist_names)
+            else:
+                self.remove_histograms()
         b = ttk.Button(self.create_playlist_frame, text='Show playlist', command = show_value,
                        style='my.TButton')
         b.pack(side = "left", anchor = 'c',fill='both', expand=True)
@@ -402,7 +409,33 @@ class Radar():
                                  style='my.TButton')
         self.button.pack(side = tk.RIGHT, anchor = 'c',fill='both', expand=True)
 
+        # Create a colormap from green to red
+        # try:
+        playlist_names = list(self.playlists[self.first_table.current_table.get()].keys())
+        playlist_tracks = self.db.get_playlists_tracks(playlist_names)
+        columns_, values = self.db.retrieve_features(playlist_tracks)
+        #     # TODO: maybe do not load all features but only features that matters
+        #     db_columns, db_values = self.db.get_all_features()
+        df = pd.DataFrame(values, columns=columns_)
+        self.violins = []
+        for i, col in enumerate(self.cols):
+            # normalize the column so that rounding is then equivalent everywhere
+            violin_pos, violin_neg = self.get_violin(df[col], i)
+            violin_pos.set_alpha(0)
+            violin_neg.set_alpha(0)
+            self.violins.append([violin_pos, violin_neg])
+        # except AttributeError:
+        #     pass
+
         self.window.mainloop()
+
+    # def run_mainloop(self):
+    #     self.window.mainloop()
+
+    def remove_histograms(self):
+        self.shown_violins = False
+        [self.remove_histogram(i) for i in range(len(self.violins))]
+        self.canvas.draw()
 
     def update_plot(self):
         """
@@ -417,37 +450,36 @@ class Radar():
             # not drawn yet
             print("why")
         try:
-            values = self.db.retrieve_feature(self.currently_playing['item']['id'])
+            columns, values = self.db.retrieve_feature(self.currently_playing['item']['id'])
             # print(values)
         except TypeError:
             self.currently_playing = self.client.get_current_track()
-            values = self.db.retrieve_feature(self.currently_playing['item']['id'])
+            columns, values = self.db.retrieve_feature(self.currently_playing['item']['id'])
+        except AttributeError:
+            # connection only to Drive
+            self.update_playing_text()
+            self.canvas.draw()
+            return
         self.adjusted_values = []
         if len(values)==0:
-            if not self.currently_playing['item']['id'] in self.features_in_drive['id'].unique():
-                print("Getting features through API")
-                features = self.client.get_features([self.currently_playing['item']['id']])
-                self.features_to_add['name'].append(self.currently_playing['item']['name'])
-                for col in features[0].keys():
-                    self.features_to_add[col].append(features[0][col])
-                for i, name in enumerate(self.cols):
-                    value = (features[0][name]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
-                    self.adjusted_values.append(value)
-            else:
-                # take from the Drive
-                features = self.features_in_drive[
-                    self.features_in_drive['id'] == self.currently_playing['item']['id']
-                    ]
-                for i, name in enumerate(self.cols):
-                    value = (features[name]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
-                    self.adjusted_values.append(value)
+            print("Getting features through API")
+            features = self.client.get_features([self.currently_playing['item']['id']])
+            self.features_to_add['name'].append(self.currently_playing['item']['name'])
+            for col in features[0].keys():
+                self.features_to_add[col].append(features[0][col])
+            for i, name in enumerate(self.cols):
+                value = (features[0][name]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+                self.adjusted_values.append(value)
         else:
             for i, name in enumerate(self.cols):
-                index = self.columns.index(name)
-                value = (values[0][index]-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+                index = columns.index(name)
+                value = (float(values[0][index])-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
                 self.adjusted_values.append(value)
         self.adjusted_values += self.adjusted_values[:1]
-        self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[-1]), alpha=0.5)
+        try:
+            self.playing = self.ax.fill(self.angles, self.adjusted_values, color=_from_rgb(self.color_palette[-1]), alpha=0.5)
+        except RuntimeError:
+            pass
         self.update_playing_text()
         self.canvas.draw()
 
@@ -478,7 +510,7 @@ class Radar():
                     of the points)
         :rtype: Tuple[Polygon, Polygon]
         """
-        col_normalized = (serie-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
+        col_normalized = (serie.astype(float)-self.limits[i][0])/(self.limits[i][1]-self.limits[i][0])
         polygon_data_points = col_normalized.round(1).value_counts().sort_index().reset_index().to_numpy()
         # normalize between 0 and 1 the second dimension of the array
         polygon_data_points[:,1] = polygon_data_points[:,1]/(10*polygon_data_points[:,1].max())

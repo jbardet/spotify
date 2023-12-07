@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import requests
 import json
+import re
 from io import StringIO
 from datetime import datetime, timedelta
 from datetime import date
@@ -21,6 +22,8 @@ from Configs.Parser import Parser
 from Credentials.Credentials import Credentials
 from typing import Callable, Tuple, List
 from Drive.Drive import Drive
+from Database.Database import Database
+from threading import Thread
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -31,7 +34,7 @@ class Timer():
     websites
     """
 
-    def __init__(self, callback: Callable) -> None:
+    def __init__(self, callback: Callable, db) -> None:
         """
         Initialize the frame with the timer and the links
 
@@ -39,11 +42,11 @@ class Timer():
                          that will update the plots from the RescueWakaTime window
         :type callback: Callable
         """
-        self.timer_data_file = Parser.get_timer_data_file()
-        self.offline_data_file = Parser.get_offline_work_file()
+        # self.timer_data_file = Parser.get_timer_data_file()
+        # self.offline_data_file = Parser.get_offline_work_file()
         self.pomdoro_time = Parser.get_pomodoro()
         self.callback = callback
-        self.drive = Drive()
+        self.db = db
 
     def build_frame(self, window: ttk.Frame, objective: float, bg_string: str, fg_string: str):
         """
@@ -58,6 +61,9 @@ class Timer():
         :param fg_string: the foreground color
         :type fg_string: str
         """
+        db_thread = Thread(target=self.get_total_time)
+        db_thread.start()
+
         self.window = window
         self.min = np.inf
         self.run = False
@@ -76,16 +82,28 @@ class Timer():
             'category': [],
             'description': [],
             'start': [],
-            'end': [],
+            'finish': [],
             'date': []
         }
 
-        self.load_data()
         self.plot_frame = ttk.Frame(self.window)
         self.plot_frame.pack(side='top', anchor = 'c', fill='both', expand=True)
-        total_time = self.compute_time()
-        self.add_radial_plot(total_time)
+
+        db_thread.join()
+        # total_time = self.get_total_time()
+
+        self.add_radial_plot()
         self.add_timer()
+
+    def get_total_time(self):
+        """
+        Get the total time the timer has been running
+
+        :return: the total time the timer has been running
+        :rtype: float
+        """
+        self.load_data()
+        self.compute_time()
 
     def compute_time(self) -> float:
         """
@@ -95,16 +113,22 @@ class Timer():
         :return: the total time the Timer was running on the day
         :rtype: float
         """
-        offline_time = np.sum([(datetime.strptime(self.offline_dict['end'][i], "%H:%M") - \
-            datetime.strptime(self.offline_dict['start'][i], "%H:%M")).seconds \
-                for i in range(len(self.offline_dict['start']))])
+        offline_time = 0
+        for i in range(len(self.offline_dict['start'])):
+            try:
+                offline_time += (datetime.strptime(self.offline_dict['finish'][i], "%H:%M") - \
+                    datetime.strptime(self.offline_dict['start'][i], "%H:%M")).seconds
+            except ValueError:
+                    offline_time += (datetime.strptime(self.offline_dict['finish'][i], "%H:%M:%S") - \
+                        datetime.strptime(self.offline_dict['start'][i], "%H:%M:%S")).seconds
+
         timer_time = 0
         for i, event in enumerate(self.timer_dict['event']):
             if i == 0: continue
             if self.timer_dict['event'][i-1] == "start" and \
                 (event == 'pause' or event == 'stop' or event == "finish"):
                 timer_time += (self.timer_dict['time'][i] - self.timer_dict['time'][i-1]).total_seconds()
-        return offline_time + timer_time
+        self.total_time = offline_time + timer_time
 
     def play(self):
         """
@@ -185,10 +209,16 @@ class Timer():
                 label.pack(side=tk.TOP)
                 self.add_links(toplevel)
                 self.reset()
-                del self.event
-                del self.submit_thread
-                total_time = self.compute_time()
-                self.add_radial_plot(total_time)
+                try:
+                    del self.event
+                except AttributeError:
+                    pass
+                try:
+                    del self.submit_thread
+                except AttributeError:
+                    pass
+                self.compute_time()
+                self.add_radial_plot()
                 self.callback()
 
             # after every one sec the value of temp will be decremented by one
@@ -229,8 +259,8 @@ class Timer():
             del self.submit_thread
         except AttributeError:
             pass
-        total_time = self.compute_time()
-        self.add_radial_plot(total_time)
+        self.compute_time()
+        self.add_radial_plot()
         self.callback()
 
     def reset(self):
@@ -367,15 +397,15 @@ class Timer():
             # check that entered time does not overlap with timer values
             for i, event in enumerate(self.offline_dict['date']):
                 if event == datetime.strptime(self.date.get(), "%Y-%m-%d").date():
-                    end_before_start = self.offline_dict['end'][i] < self.start.get()
+                    end_before_start = self.offline_dict['finish'][i] < self.start.get()
                     start_after_end = self.offline_dict['start'][i] > self.end.get()
                     start_before_start = self.offline_dict['start'][i] < self.start.get()
-                    end_after_end = self.end.get() < self.offline_dict['end'][i]
+                    end_after_end = self.end.get() < self.offline_dict['finish'][i]
                     msg = f"The offline work you want to add is already in the database:\n"
                     msg+= f"Category: {self.offline_dict['category'][i]}\n"
                     msg+= f"Description: {self.offline_dict['description'][i]}\n"
                     msg+= f"Start: {self.offline_dict['start'][i]}\n"
-                    msg+= f"End: {self.offline_dict['end'][i]}\n"
+                    msg+= f"End: {self.offline_dict['finish'][i]}\n"
                     msg+= f"Date: {self.offline_dict['date'][i]}\n"
                     assert end_before_start or start_after_end or \
                         (start_before_start and end_after_end), msg
@@ -398,14 +428,15 @@ class Timer():
             print(e)
             conflict = True
         if not conflict:
+            print("Offline time added")
             self.add_offline_work()
 
     def update_plot(self):
         """
         Update the plot with the new times added
         """
-        total_time = self.compute_time()
-        self.add_radial_plot(total_time)
+        self.compute_time()
+        self.add_radial_plot()
 
     def add_offline_work(self):
         """
@@ -414,7 +445,7 @@ class Timer():
         self.offline_dict['category'].append(self.category.get())
         self.offline_dict['description'].append(self.description.get())
         self.offline_dict['start'].append(self.start.get())
-        self.offline_dict['end'].append(self.end.get())
+        self.offline_dict['finish'].append(self.end.get())
         self.offline_dict['date'].append(date.today())
         self.update_plot()
 
@@ -440,19 +471,21 @@ class Timer():
 
     def load_data(self):
         """
-        Load the data from the Google Drive spreadsheets
+        Load the data from the Raspberry Pi database or Google Drive spreadsheets
         """
-        df_drive, _ = self.drive.get_data(self.timer_data_file)
+        db_columns, db_value = self.db.get_timer_data()
+        # df_drive, _ = self.drive.get_data(self.timer_data_file)
+        # df_drive = self.db.get_timer_data()
         retry = True
         while retry:
             retry = False
             try:
-                df_drive['time'] = pd.to_datetime(df_drive['time'])
-                # find columns where the date is today
-                today_work = df_drive[df_drive['time'].dt.date == date.today()]
-                for _, row in today_work.iterrows():
-                    self.timer_dict["event"].append(row['event'])
-                    self.timer_dict["time"].append(row['time'])
+                for row in db_value:
+                    for i, key in enumerate(db_columns):
+                        if key=="time":
+                            self.timer_dict[key].append(parse_timestamp(row[i]))
+                        else:
+                            self.timer_dict[key].append(row[i])
             except KeyError:
                 # there is no data in the spreadsheet
                 pass
@@ -461,20 +494,18 @@ class Timer():
                 retry = True
         self.timer_suppress = len(self.timer_dict["event"])
 
-        df_drive, _ = self.drive.get_data(self.offline_data_file)
+        # df_drive, _ = self.drive.get_data(self.offline_data_file)
+        db_columns, db_value = self.db.get_offline_data()
         retry = True
         while retry:
             retry = False
             try:
-                df_drive['date'] = pd.to_datetime(df_drive['date'])
-                # find columns where the date is today
-                today_work = df_drive[df_drive['date'].dt.date == date.today()]
-                for _, row in today_work.iterrows():
-                    self.offline_dict["category"].append(row['category'])
-                    self.offline_dict["description"].append(row['description'])
-                    self.offline_dict["start"].append(row['start'])
-                    self.offline_dict["end"].append(row['end'])
-                    self.offline_dict["date"].append(row['date'].date())
+                for row in db_value:
+                    for i, key in enumerate(db_columns):
+                        if key=="date":
+                            self.offline_dict[key].append(datetime.strptime(row[i], '%Y-%m-%d').date())
+                        else:
+                            self.offline_dict[key].append(row[i])
             except KeyError:
                 # there is no data in the spreadsheet
                 pass
@@ -487,10 +518,11 @@ class Timer():
         """
         Save data to the Google Drive spreadsheet
         """
-        self.drive.save_data(self.timer_data_file, self.timer_dict, self.timer_suppress)
-        self.drive.save_data(self.offline_data_file, self.offline_dict, self.offline_suppress)
+        self.db.save_timer_data(self.timer_dict, self.timer_suppress)
+        # self.drive.save_data(self.timer_data_file, self.timer_dict, self.timer_suppress)
+        self.db.save_offline_data(self.offline_dict, self.offline_suppress)
 
-    def add_radial_plot(self, time: float):
+    def add_radial_plot(self):
         """
         Make the radial plot and add to the GUI
 
@@ -501,7 +533,7 @@ class Timer():
         # already have done to the objective
         try:
             self.canvas.get_tk_widget().destroy()
-        except AttributeError:
+        except (AttributeError, tk.TclError):
             # no widget drawn yet
             pass
         ring_width = 0.3
@@ -509,7 +541,7 @@ class Timer():
         inner_radius = outer_radius - ring_width
 
         # set up plot
-        value = time/3600
+        value = self.total_time/3600
         ring_arrays = calculate_rings(value, self.objective)
         fig, ax = plt.subplots()
 
@@ -677,3 +709,6 @@ def add_sub_center_label(objective: float, color: str) -> plt.text:
             horizontalalignment='center',
             verticalalignment='top',
             fontsize = 22,family = 'sans-serif')
+
+def parse_timestamp(timestamp):
+    return datetime(*[int(x) for x in re.findall(r'\d+', timestamp)])

@@ -158,9 +158,9 @@ class Todoist():
             except Exception as error:
                 print(error)
 
-    def save_data(self):
+    def save_data(self, __backup_path):
         try:
-            tasks_saved = pd.read_csv('data/todoist_tasks_completed.csv')
+            tasks_saved = pd.read_csv(os.path.join(__backup_path, 'todoist_tasks_completed.csv'))
             # tasks_saved.sort_values(['date', 'hour'], inplace=True)
             # tasks_saved.to_csv('data/todoist_tasks_completed.csv')
             tasks_last_save = [tasks_saved['date'].iloc[-1], tasks_saved['hour'].iloc[-1]]
@@ -228,7 +228,7 @@ class Todoist():
         #     task = requests.get("https://api.todoist.com/sync/v9/items/get", headers=headers, data={'item_id': row['id']})
 
         # save to CSV
-        past_tasks.to_csv("data/todoist-tasks-completed.csv", index=False)
+        past_tasks.to_csv(os.path.join(__backup_path, "todoist-tasks-completed.csv"), index=False)
         print("finished")
 
     def get_completed_todoist_items(self, user_completed_stats, headers, tasks_last_save):

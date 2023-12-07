@@ -73,7 +73,7 @@ class Database:
           index=False)
         print("done")
 
-    def save_feature_to_db(self, data: pd.DataFrame):
+    def save_feature_to_db(self, data: pd.DataFrame, db_name: str):
         # Store the data in the Local SQL Server database
         conn = self.__connect_to_db()
         #creating the cursor to execute the SQL commands
@@ -81,7 +81,7 @@ class Database:
         # Loading the data to the database table
         # register_adapter(np.float64, addapt_numpy_float64)
         # register_adapter(np.int64, addapt_numpy_int64)
-        self.__update_database(curr, conn, data)
+        self.__update_database(curr, conn, data, db_name)
         # command = "ALTER TABLE features ADD PRIMARY KEY (id);"
         # curr.execute(command)
 
@@ -128,7 +128,7 @@ class Database:
         curr.execute(query_insert_new_videos, variables_insert)
 
     #Defining the function which will update the database inserting new records and/or updating the metrics
-    def __update_database(self, curr, conn, df):
+    def __update_database(self, curr, conn, df, db_name):
         # Create a new empty df exactly before, which we will append the rows which never were stored in the database (for the first time, all records will be stored here since there are any records)
         # new_videos_df = pd.DataFrame(columns=["video_id", "view_count"])
 
@@ -138,7 +138,7 @@ class Database:
         #         pass
         #     else: #if the video does not exist, it will append to the db table
         #         # new_videos_df = pd.concat([new_videos_df, pd.DataFrame([row])], ignore_index=True)
-        self.__insert_data(curr, conn, df)
+        self.__insert_data(curr, conn, df, db_name)
         # return new_videos_df
 
     def is_artist_in_db(self, id: str):
@@ -157,10 +157,12 @@ class Database:
         curr.execute(command, variables)
         return curr.fetchall()[0][0]
 
-    def __insert_data(self, curr, conn, df):
+    def __insert_data(self, curr, conn, df, db_name):
         # conn.autocommit = True
         engine = self.__create_engine()
-        df.to_sql('features', con=engine, if_exists='append',
+        # df.to_sql('features_playlist', con=engine, if_exists='append',
+        #   index=False)
+        df.to_sql(db_name, con=engine, if_exists='append',
           index=False)
         print("done")
 
